@@ -1,5 +1,6 @@
 import { getPack, savePack, removePack } from "./store.js";
 import { KINDS, renderEntry, listSecondary, esc, titleCase, spellLevelLabel } from "./render.js";
+import { mountWizard, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
 
 const SUPPORTED_FORMAT = 1;
 const $ = sel => document.querySelector(sel);
@@ -50,6 +51,7 @@ async function loadFile(file) {
   try { await savePack(data); }
   catch { toast("The pack loaded but couldn't be saved in this browser, so you'll need to load it again next visit. Private browsing windows block saving.", "error"); }
   pack = data;
+  if (wizardMounted) { unmountWizard(); wizardMounted = false; } // remount against the new pack
   toast(`Loaded content pack ${data.meta.version}`);
   render();
 }
@@ -57,6 +59,7 @@ async function loadFile(file) {
 // ---------- views ----------
 function renderEmpty() {
   $("#pack-status").hidden = true;
+  $("#topnav").hidden = true;
   app.innerHTML = `
     <section class="empty">
       <h1>Load your content pack</h1>
@@ -124,8 +127,6 @@ function renderBrowser() {
     kind = KINDS.find(k => Object.keys(pack[k.key] ?? {}).length) ?? KINDS[0];
     history.replaceState(null, "", `#/${kind.path}`);
   }
-  $("#pack-status").hidden = false;
-  $("#pack-version").textContent = packLabel();
 
   const entry = id ? pack[kind.key]?.[id] : null;
   const detail = entry
@@ -158,9 +159,44 @@ function renderBrowser() {
   });
 }
 
+function renderHome() {
+  const draft = hasDraft() ? draftLabel(pack) : "";
+  app.innerHTML = `
+    <section class="home">
+      <h1>What are you working on?</h1>
+      <div class="home-actions">
+        ${draft ? `<a class="home-card" href="#/new"><strong>Continue your character</strong><span>${esc(draft || "Your unfinished character")}</span></a>` : ""}
+        <a class="home-card" href="${draft ? "#/new/fresh" : "#/new"}"><strong>${draft ? "Start a different character" : "Build a character"}</strong><span>Class, background, species, ability scores, spells and gear, one step at a time.</span></a>
+        <a class="home-card" href="#/classes"><strong>Browse the compendium</strong><span>Read every class, species, background, feat and spell in your content pack.</span></a>
+      </div>
+    </section>`;
+}
+
+function setChrome(section) {
+  $("#pack-status").hidden = false;
+  $("#pack-version").textContent = packLabel();
+  $("#topnav").hidden = false;
+  for (const a of document.querySelectorAll("#topnav a")) {
+    if (a.dataset.nav === section) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+}
+
+let wizardMounted = false;
 function render() {
-  if (!pack) renderEmpty();
-  else renderBrowser();
+  if (!pack) { if (wizardMounted) { unmountWizard(); wizardMounted = false; } renderEmpty(); return; }
+  const hash = location.hash || "#/";
+  if (hash.startsWith("#/new")) {
+    setChrome("new");
+    const fresh = hash === "#/new/fresh";
+    if (fresh) history.replaceState(null, "", "#/new");
+    if (!wizardMounted || fresh) { if (wizardMounted) unmountWizard(); mountWizard(app, pack, { fresh }); wizardMounted = true; }
+    return;
+  }
+  if (wizardMounted) { unmountWizard(); wizardMounted = false; }
+  if (hash === "#/" || hash === "#") { setChrome("home"); renderHome(); return; }
+  setChrome("compendium");
+  renderBrowser();
 }
 
 // ---------- wiring ----------
@@ -177,6 +213,7 @@ $("#btn-remove").addEventListener("click", async () => {
 
 window.addEventListener("hashchange", () => {
   if (!pack) return;
+  if (location.hash.startsWith("#/new") && wizardMounted && location.hash !== "#/new/fresh") return;
   render();
   document.querySelector(".detail-pane")?.scrollTo?.(0, 0);
   window.scrollTo(0, 0);

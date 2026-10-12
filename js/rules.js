@@ -25,3 +25,28 @@ export function pactSlots(classLevel) {
 
 export const ABILITIES = { str: "Strength", dex: "Dexterity", con: "Constitution", int: "Intelligence", wis: "Wisdom", cha: "Charisma" };
 export const ABBR = { str: "Str", dex: "Dex", con: "Con", int: "Int", wis: "Wis", cha: "Cha" };
+
+export const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+export const mod = score => Math.floor((score - 10) / 2);
+export const signed = n => (n >= 0 ? `+${n}` : `${n}`);
+
+export const SKILLS = {
+  Acrobatics: "dex", "Animal Handling": "wis", Arcana: "int", Athletics: "str", Deception: "cha", History: "int",
+  Insight: "wis", Intimidation: "cha", Investigation: "int", Medicine: "wis", Nature: "int", Perception: "wis",
+  Performance: "cha", Persuasion: "cha", Religion: "int", "Sleight of Hand": "dex", Stealth: "dex", Survival: "wis",
+};
+
+export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
+export const POINT_BUY = { budget: 27, cost: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 } };
+
+// Every 2024 character knows Common plus two standard languages.
+export const STANDARD_LANGUAGES = ["Common Sign Language", "Draconic", "Dwarvish", "Elvish", "Giant", "Gnomish", "Goblin", "Halfling", "Orc"];
+export const ALIGNMENTS = ["Lawful Good", "Neutral Good", "Chaotic Good", "Lawful Neutral", "Neutral", "Chaotic Neutral", "Lawful Evil", "Neutral Evil", "Chaotic Evil", "Unaligned"];
+
+// Highest spell level a caster can prepare at a class level.
+export function maxSpellLevel(progression, classLevel) {
+  if (progression === "pact") return pactSlots(classLevel).level;
+  return spellSlots(progression, classLevel).length;
+}
+
+export const ordinal = n => n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th");

@@ -13,6 +13,10 @@
 <body>
   <header class="topbar">
     <a class="brand" href="#/">Character Builder</a>
+    <nav class="topnav" id="topnav" aria-label="Main" hidden>
+      <a href="#/new" data-nav="new">Build a character</a>
+      <a href="#/classes" data-nav="compendium">Compendium</a>
+    </nav>
     <div class="pack-status" id="pack-status" hidden>
       <span id="pack-version"></span>
       <button type="button" class="btn" id="btn-load">Load new pack</button>
@@ -20,7 +24,7 @@
     </div>
   </header>
 
-  <main id="app" aria-live="polite"></main>
+  <main id="app"></main>
 
   <input type="file" id="file-input" accept=".json,application/json" hidden>
   <div class="drop-overlay" id="drop-overlay" hidden><p>Drop the content pack to load it</p></div>

@@ -52,7 +52,7 @@ const PER = { short: "short rest", long: "long rest", dawn: "day" };
 const ACTION = { action: "Action", bonus: "Bonus action", reaction: "Reaction", free: "Free" };
 
 // ---------- references between entries ----------
-function makeLinker(pack) {
+export function makeLinker(pack) {
   return (kindKey, id, label) => {
     const entry = pack[kindKey]?.[id];
     const path = KINDS.find(k => k.key === kindKey).path;
