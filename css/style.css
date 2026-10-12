@@ -559,7 +559,7 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .group-title { font-size: 0.98rem; color: var(--verdigris); margin: 0.9rem 0 0.3rem; }
 .group-title:first-of-type { margin-top: 0.2rem; }
 .facts.one-col { grid-template-columns: 1fr; }
-.side-col textarea, .notes-panel textarea {
+.side-col textarea, .notes-panel textarea, #char-notes {
   width: 100%; font: inherit; font-size: 16px; line-height: 1.5; color: var(--ink); resize: vertical;
   background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem;
 }

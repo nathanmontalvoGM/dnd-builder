@@ -90,6 +90,7 @@ function ensurePlay() {
   p.equipment ??= startingEquipmentText();
   p.coins ??= { cp: 0, sp: 0, ep: 0, gp: s.gold ?? 0, pp: 0 };
   p.notes ??= "";
+  p.characterNotes ??= "";
 }
 
 function startingEquipmentText() {
@@ -269,6 +270,9 @@ function render() {
       <div class="main-col">
         ${renderAttacks(s, p)}
         ${renderClassStats(s)}
+        <section class="panel"><h2><label for="char-notes">Your notes</label></h2>
+          <textarea id="char-notes" rows="5" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>
+        </section>
         ${renderResources(s, p)}
         ${renderFeatures(s, p, f)}
       </div>
