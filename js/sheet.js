@@ -12,7 +12,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set() }; // expanded feature/spell rows, collapsed feature groups
+const ui = { open: new Set(), closedGroups: new Set(), printing: false }; // expanded feature/spell rows, collapsed feature groups
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -181,6 +181,7 @@ function render() {
       <div class="sheet-actions">
         <button type="button" class="btn" data-levelup ${s.level >= 20 ? "disabled" : ""}>Level up</button>
         <button type="button" class="btn" data-edit-build>Edit in builder</button>
+        <button type="button" class="btn" data-print>Export PDF</button>
         <button type="button" class="btn" data-rest="short">Short rest</button>
         <button type="button" class="btn" data-rest="long">Long rest</button>
         <button type="button" class="btn btn-primary" data-save>${state.dirty ? "Save file" : "Saved"}</button>
@@ -271,7 +272,7 @@ function render() {
         ${renderAttacks(s, p)}
         ${renderClassStats(s)}
         <section class="panel"><h2><label for="char-notes">Your notes</label></h2>
-          <textarea id="char-notes" rows="14" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>
+          ${box(`<textarea id="char-notes" rows="14" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>`, p.characterNotes)}
         </section>
         ${renderResources(s, p)}
         ${renderFeatures(s, p, f)}
@@ -289,7 +290,7 @@ function render() {
         ${renderDefenses(s)}
         <section class="panel"><h2>Equipment</h2>
           <label class="visually-hidden" for="equip">Equipment</label>
-          <textarea id="equip" rows="10" data-play="equipment" data-focus="equipment" placeholder="One item per line">${esc(p.equipment)}</textarea>
+          ${box(`<textarea id="equip" rows="10" data-play="equipment" data-focus="equipment" placeholder="One item per line">${esc(p.equipment)}</textarea>`, p.equipment)}
           <div class="coins">${COINS.map(c => `<label><span>${c.toUpperCase()}</span><input type="number" min="0" data-play="coins.${c}" data-focus="coin-${c}" value="${p.coins[c] ?? 0}"></label>`).join("")}</div>
         </section>
       </aside>
@@ -300,8 +301,8 @@ function render() {
     <section class="panel notes-panel">
       <h2>Notes</h2>
       <div class="notes-grid">
-        <label class="field"><span>Session notes</span><textarea rows="6" data-play="notes" data-focus="notes">${esc(p.notes)}</textarea></label>
-        <label class="field"><span>Appearance and backstory</span><textarea rows="6" data-detail="backstory" data-focus="backstory">${esc(f.details?.backstory ?? "")}</textarea></label>
+        <label class="field"><span>Session notes</span>${box(`<textarea rows="6" data-play="notes" data-focus="notes">${esc(p.notes)}</textarea>`, p.notes)}</label>
+        <label class="field"><span>Appearance and backstory</span>${box(`<textarea rows="6" data-detail="backstory" data-focus="backstory">${esc(f.details?.backstory ?? "")}</textarea>`, f.details?.backstory)}</label>
       </div>
     </section>
     <p class="sheet-foot muted">Built with content pack ${esc(f.pack?.version ?? "unknown")}. Last saved ${f.updated ? new Date(f.updated).toLocaleString() : "never"}.</p>
@@ -311,6 +312,30 @@ function render() {
     const el = root.querySelector(`[data-focus="${CSS.escape(focusId)}"]`);
     if (el) el.focus();
   }
+}
+
+// ---------- PDF export ----------
+// The browser's print dialog does the PDF ("Save as PDF"). For the printout every feature and spell is
+// expanded, collapsed groups open, and text boxes become plain text so nothing is cut off.
+const box = (html, text) => ui.printing ? `<div class="print-text">${esc(text ?? "") || "&nbsp;"}</div>` : html;
+
+function exportPdf(s) {
+  const f = state.file;
+  const title = document.title;
+  const name = f.details?.name || "Character";
+  document.title = `${name} - Level ${s.level} ${s.classes.map(c => c.name).join(" ")}`.replace(/[\\/:*?"<>|]+/g, "");
+  ui.printing = true;
+  document.documentElement.classList.add("printing");
+  render();
+  const done = () => {
+    ui.printing = false;
+    document.documentElement.classList.remove("printing");
+    document.title = title;
+    render();
+  };
+  window.addEventListener("afterprint", done, { once: true });
+  // Give fonts a moment, then open the dialog.
+  (document.fonts?.ready ?? Promise.resolve()).then(() => window.print());
 }
 
 // ---------- content updates ----------
@@ -415,7 +440,7 @@ function renderAttacks(s, p) {
         <td><input type="text" data-attack="${i}" data-field="damage" data-focus="atk-${i}-damage" value="${esc(a.damage)}" aria-label="Damage"></td>
         <td><input type="text" data-attack="${i}" data-field="notes" data-focus="atk-${i}-notes" value="${esc(a.notes)}" aria-label="Notes"></td>
         <td><button type="button" class="link-btn" data-remove-attack="${i}" aria-label="Remove ${esc(a.name || "attack")}">Remove</button></td>
-      </tr>`).join("")}</tbody></table>` : `<p class="muted">Add your weapons here. Attack bonus is your Strength or Dexterity modifier plus your proficiency bonus if you're trained with it.</p>`}
+      </tr>`).join("")}</tbody></table>` : `<p class="muted attack-hint">Add your weapons here. Attack bonus is your Strength or Dexterity modifier plus your proficiency bonus if you're trained with it.</p>`}
     <button type="button" class="btn" data-add-attack>Add an attack</button>
   </section>`;
 }
@@ -455,7 +480,7 @@ function renderFeatures(s, p, f) {
   const featEntries = s.feats.map(x => ({ ...x, entry: f.snapshot.feats?.[x.id] }));
   const featFeatureNames = new Set(featEntries.map(x => x.name));
   const row = (id, name, sourceText, body, chips = "") => {
-    const open = ui.open.has(id);
+    const open = ui.printing || ui.open.has(id);
     return `<li class="feature-row ${open ? "open" : ""}">
       <button type="button" class="feature-toggle" data-toggle="${esc(id)}" aria-expanded="${open}"><span>${esc(name)}${chips}</span><span class="muted">${esc(sourceText)}</span></button>
       ${open ? `<div class="feature-body">${body || `<p class="muted">No description in the content snapshot.</p>`}</div>` : ""}
@@ -469,7 +494,7 @@ function renderFeatures(s, p, f) {
     return `Level ${x.level}${by !== groups.get(g).title.replace(/ \d+$/, "") ? ` · ${by}` : ""}`;
   };
   const section = (key, title, sub, count, body) => {
-    const closed = ui.closedGroups.has(key);
+    const closed = !ui.printing && ui.closedGroups.has(key);
     return `<div class="feature-group ${closed ? "closed" : ""}">
       <button type="button" class="group-toggle" data-group="${esc(key)}" aria-expanded="${!closed}">
         <span class="group-title">${esc(title)}${sub ? ` <span class="group-sub">${esc(sub)}</span>` : ""}</span>
@@ -522,7 +547,7 @@ function renderSpells(s, p, f) {
   const spellRow = sp => {
     const e = f.snapshot.spells?.[sp.id];
     const id = `s:${sp.id}|${sp.sources[0]}`;
-    const open = ui.open.has(id);
+    const open = ui.printing || ui.open.has(id);
     const tags = [];
     if (sp.always_prepared) tags.push("always prepared");
     if (e?.concentration) tags.push("concentration");
@@ -636,6 +661,7 @@ function onClick(e) {
   }
   if (d.levelup !== undefined) { location.hash = "#/levelup"; return; }
   if (d.editBuild !== undefined) { location.hash = "#/edit"; return; }
+  if (d.print !== undefined) return exportPdf(s);
   if (d.refreshContent !== undefined) return refreshContent(s);
   if (d.group) { ui.closedGroups.has(d.group) ? ui.closedGroups.delete(d.group) : ui.closedGroups.add(d.group); render(); return; }
   if (d.groups) {
