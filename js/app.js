@@ -1,6 +1,7 @@
 import { getPack, savePack, removePack } from "./store.js";
 import { KINDS, renderEntry, listSecondary, esc, titleCase, spellLevelLabel } from "./render.js";
 import { mountWizard, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
+import { mountSheet, unmountSheet, validateCharacter, openCharacter, restoreCharacter, currentCharacter, hasUnsavedChanges } from "./sheet.js";
 
 const SUPPORTED_FORMAT = 1;
 const $ = sel => document.querySelector(sel);
@@ -39,8 +40,9 @@ async function loadFile(file) {
   if (!file) return;
   let data;
   try { data = JSON.parse(await file.text()); }
-  catch { toast(`${file.name} isn't valid JSON. Make sure you picked content.json.`, "error"); return; }
+  catch { toast(`${file.name} isn't valid JSON. Pick a content.json or a .character.json file.`, "error"); return; }
 
+  if (data?.kind === "character") return loadCharacter(data);
   const problem = validatePack(data);
   if (problem) { toast(problem, "error"); return; }
 
@@ -56,6 +58,20 @@ async function loadFile(file) {
   render();
 }
 
+function loadCharacter(data) {
+  const problem = validateCharacter(data);
+  if (problem) { toast(problem, "error"); return; }
+  const open = currentCharacter();
+  if (open && hasUnsavedChanges() && open.id !== data.id &&
+      !confirm(`${open.details?.name || "Your open character"} has changes that aren't saved to a file yet. Open ${data.details?.name || "this character"} anyway?`)) return;
+  if (open && open.id === data.id && hasUnsavedChanges() &&
+      !confirm("This replaces the open copy of this character, including changes you haven't saved. Continue?")) return;
+  openCharacter(data);
+  if (sheetMounted) { unmountSheet(); sheetMounted = false; }
+  toast(`Opened ${data.details?.name || "character"}`);
+  if (location.hash === "#/sheet") render(); else location.hash = "#/sheet";
+}
+
 // ---------- views ----------
 function renderEmpty() {
   $("#pack-status").hidden = true;
@@ -66,7 +82,17 @@ function renderEmpty() {
       <p>Your DM shares a file called <strong>content.json</strong> with all the classes, species, feats and spells for your game. You only need to load it once; this browser keeps it until you replace it.</p>
       <button type="button" class="btn btn-primary" id="btn-load-empty">Choose content.json</button>
       <p class="hint">Or drag the file anywhere onto this page.</p>
+      <h2 class="empty-sub">Just playing tonight?</h2>
+      <p>You can open your <strong>.character.json</strong> file without a content pack. You'll need the pack to build a new character.</p>
+      <button type="button" class="btn" id="btn-open-char-empty">Open a character file</button>
     </section>`;
+  $("#btn-open-char-empty").addEventListener("click", () => $("#file-input").click());
+  if (currentCharacter()) {
+    $("#topnav").hidden = false;
+    $("#nav-sheet").hidden = false;
+    $("#nav-sheet").textContent = currentCharacter().details?.name || "Character sheet";
+    for (const el of document.querySelectorAll("#topnav a[data-needs-pack]")) el.hidden = true;
+  }
   $("#btn-load-empty").addEventListener("click", () => $("#file-input").click());
 }
 
@@ -167,15 +193,23 @@ function renderHome() {
       <div class="home-actions">
         ${draft ? `<a class="home-card" href="#/new"><strong>Continue your character</strong><span>${esc(draft || "Your unfinished character")}</span></a>` : ""}
         <a class="home-card" href="${draft ? "#/new/fresh" : "#/new"}"><strong>${draft ? "Start a different character" : "Build a character"}</strong><span>Class, background, species, ability scores, spells and gear, one step at a time.</span></a>
+        ${currentCharacter() ? `<a class="home-card" href="#/sheet"><strong>Back to ${esc(currentCharacter().details?.name || "your character")}</strong><span>${hasUnsavedChanges() ? "Has changes you haven't saved to a file yet." : "Open on this browser."}</span></a>` : ""}
+        <button type="button" class="home-card" id="btn-open-char"><strong>Open a character file</strong><span>Load a .character.json to play from its sheet.</span></button>
         <a class="home-card" href="#/classes"><strong>Browse the compendium</strong><span>Read every class, species, background, feat and spell in your content pack.</span></a>
       </div>
     </section>`;
+  $("#btn-open-char").addEventListener("click", () => $("#file-input").click());
 }
 
 function setChrome(section) {
-  $("#pack-status").hidden = false;
-  $("#pack-version").textContent = packLabel();
+  $("#pack-status").hidden = !pack;
+  if (pack) $("#pack-version").textContent = packLabel();
   $("#topnav").hidden = false;
+  const char = currentCharacter();
+  const sheetLink = $("#nav-sheet");
+  sheetLink.hidden = !char;
+  if (char) sheetLink.textContent = char.details?.name || "Character sheet";
+  for (const a of document.querySelectorAll("#topnav a[data-needs-pack]")) a.hidden = !pack;
   for (const a of document.querySelectorAll("#topnav a")) {
     if (a.dataset.nav === section) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
@@ -183,9 +217,17 @@ function setChrome(section) {
 }
 
 let wizardMounted = false;
+let sheetMounted = false;
 function render() {
-  if (!pack) { if (wizardMounted) { unmountWizard(); wizardMounted = false; } renderEmpty(); return; }
   const hash = location.hash || "#/";
+  if (hash === "#/sheet" && currentCharacter()) {
+    if (wizardMounted) { unmountWizard(); wizardMounted = false; }
+    setChrome("sheet");
+    if (!sheetMounted) { mountSheet(app); sheetMounted = true; }
+    return;
+  }
+  if (sheetMounted) { unmountSheet(); sheetMounted = false; }
+  if (!pack) { if (wizardMounted) { unmountWizard(); wizardMounted = false; } renderEmpty(); return; }
   if (hash.startsWith("#/new")) {
     setChrome("new");
     const fresh = hash === "#/new/fresh";
@@ -211,8 +253,11 @@ $("#btn-remove").addEventListener("click", async () => {
   render();
 });
 
+window.addEventListener("open-character", e => loadCharacter(e.detail));
+
 window.addEventListener("hashchange", () => {
-  if (!pack) return;
+  if (!pack && location.hash !== "#/sheet") { render(); return; }
+  if (location.hash === "#/sheet" && sheetMounted) return;
   if (location.hash.startsWith("#/new") && wizardMounted && location.hash !== "#/new/fresh") return;
   render();
   document.querySelector(".detail-pane")?.scrollTo?.(0, 0);
@@ -234,4 +279,5 @@ window.addEventListener("drop", e => {
 
 pack = await getPack();
 if (pack && validatePack(pack)) pack = null;
+restoreCharacter();
 render();

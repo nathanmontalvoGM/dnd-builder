@@ -8,6 +8,7 @@ A D&D 2024 character builder that runs entirely in the browser. It has no conten
 - `css/style.css` — all styling (light and dark)
 - `js/app.js` — loading packs, routing, home page, the compendium browser
 - `js/wizard.js` — the character creation wizard and character file export
+- `js/sheet.js` — the character sheet: opens .character.json files, tracks play state, saves the file
 - `js/engine.js` — the rules engine: walks grants, finds open choices, computes the character
 - `js/render.js` — turns content entries and grants into readable HTML
 - `js/rules.js` — proficiency bonus and spell slot math

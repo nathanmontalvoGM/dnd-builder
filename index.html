@@ -14,8 +14,9 @@
   <header class="topbar">
     <a class="brand" href="#/">Character Builder</a>
     <nav class="topnav" id="topnav" aria-label="Main" hidden>
-      <a href="#/new" data-nav="new">Build a character</a>
-      <a href="#/classes" data-nav="compendium">Compendium</a>
+      <a href="#/new" data-nav="new" data-needs-pack>Build a character</a>
+      <a href="#/sheet" data-nav="sheet" id="nav-sheet" hidden>Character sheet</a>
+      <a href="#/classes" data-nav="compendium" data-needs-pack>Compendium</a>
     </nav>
     <div class="pack-status" id="pack-status" hidden>
       <span id="pack-version"></span>
@@ -27,7 +28,7 @@
   <main id="app"></main>
 
   <input type="file" id="file-input" accept=".json,application/json" hidden>
-  <div class="drop-overlay" id="drop-overlay" hidden><p>Drop the content pack to load it</p></div>
+  <div class="drop-overlay" id="drop-overlay" hidden><p>Drop a content pack or character file</p></div>
   <div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

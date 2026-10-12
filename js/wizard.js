@@ -466,7 +466,8 @@ function renderCreated() {
     <p>Your character file, <strong>${esc(c.filename)}</strong>, was downloaded. That file is your save: keep it somewhere safe and load it each session. Nothing else is stored online.</p>
     <p>If your browser didn't download it, use the button below.</p>
     <div class="create-row">
-      <button type="button" class="btn btn-primary" data-download-again>Download the file again</button>
+      <button type="button" class="btn btn-primary" data-open-sheet>Open the character sheet</button>
+      <button type="button" class="btn" data-download-again>Download the file again</button>
       <button type="button" class="btn" data-start-over>Build another character</button>
     </div>`;
 }
@@ -604,6 +605,10 @@ function onClick(e) {
     return;
   }
   if (t.hasAttribute("data-download-again")) return downloadJson(ui.created.file, ui.created.filename);
+  if (t.hasAttribute("data-open-sheet")) {
+    window.dispatchEvent(new CustomEvent("open-character", { detail: ui.created.file }));
+    return;
+  }
   if (t.hasAttribute("data-start-over")) {
     draft = { build: emptyBuild(), details: {}, step: "class" };
     ui = { search: {}, created: null };
