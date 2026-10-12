@@ -1,6 +1,6 @@
 import { getPack, savePack, removePack } from "./store.js";
 import { KINDS, renderEntry, listSecondary, esc, titleCase, spellLevelLabel } from "./render.js";
-import { mountWizard, mountLevelUp, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
+import { mountWizard, mountLevelUp, mountEdit, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
 import { mountSheet, unmountSheet, setSheetPack, validateCharacter, openCharacter, restoreCharacter, currentCharacter, hasUnsavedChanges } from "./sheet.js";
 
 const SUPPORTED_FORMAT = 1;
@@ -218,7 +218,7 @@ function setChrome(section) {
   }
 }
 
-let wizardMounted = false; // false | "create" | "levelup"
+let wizardMounted = false; // false | "create" | "levelup" | "edit"
 let sheetMounted = false;
 function render() {
   const hash = location.hash || "#/";
@@ -230,6 +230,13 @@ function render() {
   }
   if (sheetMounted) { unmountSheet(); sheetMounted = false; }
   if (!pack) { if (wizardMounted) { unmountWizard(); wizardMounted = false; } renderEmpty(); return; }
+  if (hash === "#/edit") {
+    const char = currentCharacter();
+    if (!char) { history.replaceState(null, "", "#/"); render(); return; }
+    setChrome("sheet");
+    if (wizardMounted !== "edit") { if (wizardMounted) unmountWizard(); mountEdit(app, pack, char); wizardMounted = "edit"; }
+    return;
+  }
   if (hash === "#/levelup") {
     const char = currentCharacter();
     if (!char) { history.replaceState(null, "", "#/"); render(); return; }
@@ -265,6 +272,15 @@ $("#btn-remove").addEventListener("click", async () => {
 
 window.addEventListener("open-character", e => loadCharacter(e.detail));
 
+// Edits from the builder: replace the open character, unsaved until they save the file.
+window.addEventListener("character-edited", e => {
+  openCharacter(e.detail, { dirty: true });
+  if (wizardMounted) { unmountWizard(); wizardMounted = false; }
+  if (sheetMounted) { unmountSheet(); sheetMounted = false; }
+  toast(`Saved changes to ${e.detail.details?.name || "your character"}. Save the file to keep them.`);
+  location.hash = "#/sheet";
+});
+
 // Level Up finished: replace the open character with the levelled copy, unsaved until they save the file.
 window.addEventListener("levelled-up", e => {
   openCharacter(e.detail, { dirty: true });
@@ -279,6 +295,7 @@ window.addEventListener("hashchange", () => {
   if (location.hash === "#/sheet" && sheetMounted) return;
   if (location.hash.startsWith("#/new") && wizardMounted === "create" && location.hash !== "#/new/fresh") return;
   if (location.hash === "#/levelup" && wizardMounted === "levelup") return;
+  if (location.hash === "#/edit" && wizardMounted === "edit") return;
   render();
   document.querySelector(".detail-pane")?.scrollTo?.(0, 0);
   window.scrollTo(0, 0);

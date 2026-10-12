@@ -6,6 +6,7 @@ import { ABILITIES, ABBR, ABILITY_KEYS, STANDARD_ARRAY, POINT_BUY, ALIGNMENTS, m
 
 const DRAFT_KEY = "character-builder:draft";
 const LEVELUP_KEY = "character-builder:levelup";
+const EDIT_KEY = "character-builder:edit";
 
 export const STEPS = [
   { id: "class", title: "Class" },
@@ -30,7 +31,7 @@ export function loadDraft() {
   return null;
 }
 function saveDraft(draft) {
-  try { localStorage.setItem(mode === "levelup" ? LEVELUP_KEY : DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  try { localStorage.setItem(mode === "levelup" ? LEVELUP_KEY : mode === "edit" ? EDIT_KEY : DRAFT_KEY, JSON.stringify(draft)); } catch {}
 }
 export function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
@@ -60,7 +61,7 @@ let draft = null;
 let pack = null;
 let root = null;
 let ui = { search: {}, created: null };
-let mode = "create"; // "create" | "levelup"
+let mode = "create"; // "create" | "levelup" | "edit"
 let lu = null;       // level up: { file, base, res0, sum0 }
 
 export function mountWizard(el, contentPack, { fresh = false } = {}) {
@@ -111,7 +112,7 @@ function render() {
   draft.visited = [...visited];
   const idx = STEPS.findIndex(s => s.id === draft.step);
 
-  root.innerHTML = `
+  root.innerHTML = `${mode === "edit" ? editBanner() : ""}
     <div class="wizard">
       <nav class="steps" aria-label="Character creation steps">
         <ol>${STEPS.map((s, i) => {
@@ -473,7 +474,7 @@ function stepReview(res, s) {
   const uniq = arr => [...new Set(arr)];
   const spellRows = s.spells.slice().sort((a, b) => (a.level ?? 99) - (b.level ?? 99) || a.name.localeCompare(b.name));
 
-  return `${heading("Review", "Check everything over. Creating the character downloads its file; keep that file, it's your save.")}
+  return `${heading("Review", mode === "edit" ? "Check everything over. Saving puts these changes into the open character; save the file from the sheet afterward to keep them." : "Check everything over. Creating the character downloads its file; keep that file, it's your save.")}
     ${blocking.length || nameMissing ? `<div class="warn-box">
       <h2>${blocking.length + (nameMissing ? 1 : 0)} thing${blocking.length + (nameMissing ? 1 : 0) === 1 ? "" : "s"} to look at</h2>
       <ul>${nameMissing ? `<li><button type="button" class="link-btn" data-go="details">Details</button> Your character doesn't have a name yet.</li>` : ""}
@@ -505,7 +506,8 @@ function stepReview(res, s) {
       <ul class="spell-review">${spellRows.map(sp => `<li><span>${esc(sp.name)}</span><span class="muted">${esc([sp.level === 0 ? "cantrip" : sp.level ? `level ${sp.level}` : null, sp.always_prepared ? "always prepared" : null, sp.free_cast ? "free cast" : null, sp.cast_ability && sp.cast_ability !== s.spellcasting?.ability ? `${ABBR[sp.cast_ability]} (DC ${sp.dc})` : null].filter(Boolean).join(", "))}</span></li>`).join("")}</ul>` : ""}
     ${info.length ? `<details class="info-notes"><summary>${info.length} note${info.length === 1 ? "" : "s"}</summary><ul>${info.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul></details>` : ""}
     <div class="create-row">
-      <button type="button" class="btn btn-primary" data-create ${(blocking.length || nameMissing) && !draft.build.overrides ? "disabled" : ""}>Create character and download file</button>
+      <button type="button" class="btn btn-primary" data-create ${(blocking.length || nameMissing) && !draft.build.overrides ? "disabled" : ""}>${mode === "edit" ? "Save changes to character" : "Create character and download file"}</button>
+      ${mode === "edit" ? `<button type="button" class="btn" data-cancel-edit>Cancel</button>` : ""}
       ${(blocking.length || nameMissing) && !draft.build.overrides ? `<p class="muted">Finish the items above, or tick the DM approval box.</p>` : ""}
     </div>`;
 }
@@ -655,6 +657,11 @@ function onClick(e) {
     const s = d.build.abilities.scores;
     s[t.dataset.pb] = Math.min(15, Math.max(8, (s[t.dataset.pb] ?? 8) + Number(t.dataset.delta)));
   });
+  if (t.hasAttribute("data-cancel-edit")) {
+    if (!confirm("Discard these edits and go back to the sheet?")) return;
+    clearEdit(); location.hash = "#/sheet"; return;
+  }
+  if (t.hasAttribute("data-create") && mode === "edit") return applyEdit();
   if (t.hasAttribute("data-create")) {
     const file = makeCharacterFile();
     const filename = `${slug(file.details.name)}.character.json`;
@@ -852,4 +859,63 @@ function applyLevelUp() {
   f.play.hp.current = Math.max(0, Math.min(sum.hp ?? 0, f.play.hp.current + gain));
   clearLevelUp();
   window.dispatchEvent(new CustomEvent("levelled-up", { detail: f }));
+}
+
+// ---------- editing a finished character ----------
+// The full creation wizard over the character's own build. Every choice can change. Saving writes the
+// new build, details and content snapshot back into the open character; play state (HP, used slots,
+// gear, notes) carries over.
+let editing = null; // { file, sum0 }
+
+export function mountEdit(el, contentPack, file) {
+  root = el;
+  mode = "edit";
+  lu = null;
+  pack = mergeContent(contentPack, file.snapshot);
+  const base = normalizeBuild(file.build);
+  editing = { file, sum0: summarize(base, pack) };
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(EDIT_KEY)); } catch {}
+  // Resume unsaved edits only for the same character and only if it hasn't changed since.
+  draft = saved?.fileId === file.id && saved?.fileUpdated === file.updated
+    ? { ...saved, build: normalizeBuild(saved.build) }
+    : { fileId: file.id, fileUpdated: file.updated, build: structuredClone(base), details: structuredClone(file.details ?? {}), step: "class", visited: STEPS.map(x => x.id) };
+  ui = { search: {}, created: null };
+  root.addEventListener("change", onChange);
+  root.addEventListener("input", onInput);
+  root.addEventListener("click", onClick);
+  render();
+}
+
+function clearEdit() {
+  try { localStorage.removeItem(EDIT_KEY); } catch {}
+}
+
+function editBanner() {
+  const name = editing?.file.details?.name || "your character";
+  return `<div class="edit-banner"><p>Editing <strong>${esc(name)}</strong>. Nothing changes on the sheet until you save on the review step.</p>
+    <button type="button" class="btn btn-quiet" data-cancel-edit>Cancel</button></div>`;
+}
+
+function applyEdit() {
+  const res = resolve(draft.build, pack);
+  const sum = summarize(draft.build, pack, res);
+  const blocking = res.warnings.filter(w => !w.info);
+  if ((blocking.length || !draft.details.name?.trim()) && !draft.build.overrides) return;
+  const f = structuredClone(editing.file);
+  f.format = 2;
+  f.build = normalizeBuild(structuredClone(draft.build));
+  f.details = structuredClone(draft.details);
+  f.snapshot = snapshotFor(res, pack);
+  if (pack.meta) f.pack = { version: pack.meta.version, built: pack.meta.built };
+  f.updated = new Date().toISOString();
+  // Keep damage taken: current HP moves by however much max HP changed.
+  f.play ??= {};
+  f.play.hp ??= { current: editing.sum0.hp ?? 0, temp: 0 };
+  const delta = (sum.hp ?? 0) - (editing.sum0.hp ?? 0);
+  f.play.hp.current = Math.max(0, Math.min(sum.hp ?? 0, f.play.hp.current + delta));
+  f.play.hitDiceSpent = Object.fromEntries(Object.entries(f.play.hitDiceSpent ?? {})
+    .map(([die, n]) => [die, Math.min(n, sum.hitDice.find(h => String(h.die) === die)?.count ?? 0)]).filter(([, n]) => n > 0));
+  clearEdit();
+  window.dispatchEvent(new CustomEvent("character-edited", { detail: f }));
 }

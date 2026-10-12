@@ -691,3 +691,7 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .group-toggle > .muted { margin-left: auto; font-size: 0.85rem; }
 .group-sub { font-family: var(--sans, inherit); font-weight: 400; font-size: 0.88rem; color: var(--muted); }
 .feature-group .feature-rows { margin-bottom: 0.6rem; }
+
+/* Editing an existing character in the builder */
+.edit-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; border: 1px solid var(--gilt); background: var(--gilt-soft); border-radius: var(--radius); padding: 0.6rem 1rem; margin-bottom: 1rem; }
+.edit-banner p { margin: 0; }
