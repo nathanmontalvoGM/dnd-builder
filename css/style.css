@@ -634,3 +634,17 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .tracker-box .stepper.hd-row { gap: 0.15rem; }
 .tracker-box .stepper.hd-row strong { font-size: 1.1rem; min-width: 1rem; }
 .tracker-box .stepper.hd-row .step-btn { width: 1.5rem; height: 1.5rem; }
+
+/* Multiclass section on the creation wizard's class step */
+.mc-box { margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); }
+.mc-box h2 { margin-top: 0; }
+.mc-rows { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.5rem; }
+.mc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+.mc-row label { display: inline-flex; align-items: center; gap: 0.4rem; }
+.mc-box .warn-box { margin-top: 0.75rem; }
+.mc-box .field { max-width: 26rem; grid-template-columns: minmax(0, 1fr); }
+.mc-box .field select { width: 100%; }
+.mc-row select {
+  font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.35em 0.5em;
+}

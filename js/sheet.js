@@ -168,6 +168,7 @@ function render() {
         <p>${esc([`Level ${s.level} ${classText}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
       </div>
       <div class="sheet-actions">
+        <button type="button" class="btn" data-levelup ${s.level >= 20 ? "disabled" : ""}>Level up</button>
         <button type="button" class="btn" data-rest="short">Short rest</button>
         <button type="button" class="btn" data-rest="long">Long rest</button>
         <button type="button" class="btn btn-primary" data-save>${state.dirty ? "Save file" : "Saved"}</button>
@@ -472,6 +473,7 @@ function onClick(e) {
     location.hash = "#/";
     return;
   }
+  if (d.levelup !== undefined) { location.hash = "#/levelup"; return; }
   if (d.toggle) { ui.open.has(d.toggle) ? ui.open.delete(d.toggle) : ui.open.add(d.toggle); render(); return; }
   if (d.slot) return change(p => togglePip(p.slotsUsed, d.slot, Number(d.i)));
   if (d.pact !== undefined) return change(p => { p.pactUsed = Number(d.i) < p.pactUsed ? Number(d.i) : Number(d.i) + 1; });

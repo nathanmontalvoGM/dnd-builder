@@ -68,6 +68,66 @@ export function setSubclass(build, classId, subclassId) {
   return b;
 }
 
+// Creation wizard: add a class at level 1, taking that level from the starting class.
+export function addClass(build, id) {
+  const b = normalizeBuild(build);
+  if (!b.classes.length || b.classes[0].level < 2 || b.classes.some(c => c.id === id)) return b;
+  b.classes[0].level -= 1;
+  b.classes.push({ id, level: 1, subclass: null });
+  return normalizeBuild(b);
+}
+
+// Remove an added class; its levels go back to the starting class.
+export function removeClass(build, index) {
+  const b = normalizeBuild(build);
+  if (index < 1 || index >= b.classes.length) return b;
+  const [gone] = b.classes.splice(index, 1);
+  b.classes[0].level += gone.level;
+  return normalizeBuild(b);
+}
+
+// Swap which class an added slot is, keeping its levels. Choices made for the old class stay in
+// build.choices under its own keys, harmlessly, in case the player switches back.
+export function changeClass(build, index, id) {
+  const b = normalizeBuild(build);
+  if (index < 1 || index >= b.classes.length || b.classes.some(c => c.id === id)) return b;
+  b.classes[index] = { id, level: b.classes[index].level, subclass: null };
+  return normalizeBuild(b);
+}
+
+// Set an added class's level without changing the total: the starting class gives or takes the difference.
+export function setClassLevel(build, index, level) {
+  const b = normalizeBuild(build);
+  if (index < 1 || index >= b.classes.length) return b;
+  const room = b.classes[0].level + b.classes[index].level - 1; // starting class keeps at least 1
+  const next = Math.min(room, clampLevel(level));
+  b.classes[0].level += b.classes[index].level - next;
+  b.classes[index].level = next;
+  return normalizeBuild(b);
+}
+
+// Level Up: one more level in a class the character has, or level 1 in a new one.
+export function levelUp(build, id) {
+  const b = normalizeBuild(build);
+  const c = b.classes.find(x => x.id === id);
+  if (c) c.level += 1;
+  else b.classes.push({ id, level: 1, subclass: null });
+  return normalizeBuild(b);
+}
+
+// What stops this build from taking (or keeping) `id` alongside its other classes, or null.
+// Taking a new class needs the prerequisite of the new class AND of every current class.
+export function multiclassBlockers(build, pack, id, scores) {
+  const b = normalizeBuild(build);
+  const ids = [...new Set([...b.classes.map(c => c.id), id])];
+  if (ids.length < 2) return [];
+  return ids.map(cid => {
+    const cls = pack.classes?.[cid];
+    const problem = cls && multiclassProblem(cls, scores);
+    return problem ? `${cls.name} needs ${problem}` : null;
+  }).filter(Boolean);
+}
+
 // Multiclassing prerequisites: `ability` passes if ANY listed score is high enough,
 // `ability_all` only if EVERY listed score is.
 function multiclassProblem(cls, scores) {
