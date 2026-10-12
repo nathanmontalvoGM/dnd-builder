@@ -12,7 +12,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set() }; // expanded feature/spell rows
+const ui = { open: new Set(), closedGroups: new Set() }; // expanded feature/spell rows, collapsed feature groups
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -139,12 +139,16 @@ function pips(count, used, attrs, label) {
     `<button type="button" class="pip ${i < used ? "used" : ""}" ${attrs} data-i="${i}" aria-label="${esc(label)} ${i + 1}${i < used ? ", used" : ""}"></button>`).join("")}</span>`;
 }
 
-function featureGroup(f) {
+// Which group a feature belongs in: one per class (its subclass features included), then species,
+// background and feats.
+function featureGroup(f, snapshot) {
   const k = f.key ?? "";
   if (k.includes(">feat.")) return "feats";
   if (k.startsWith("species.")) return "species";
   if (k.startsWith("background.")) return "background";
-  return "class";
+  const m = k.match(/^(class|subclass)\.([^/>]+)/);
+  if (!m) return "other";
+  return `class:${m[1] === "class" ? m[2] : snapshot.subclasses?.[m[2]]?.class ?? m[2]}`;
 }
 
 const rechargeLabel = r => ({ short: "short rest", long: "long rest", dawn: "dawn" })[r] ?? r;
@@ -429,10 +433,22 @@ function renderResources(s, p) {
 }
 
 function renderFeatures(s, p, f) {
-  const groups = { class: [], species: [], background: [], feats: [] };
-  for (const feat of s.features) groups[featureGroup(feat)].push(feat);
-  const titles = { class: "Class features", species: `${f.snapshot.species?.[f.build.species]?.name ?? "Species"} traits`, background: "Background", feats: "Feat features" };
+  // Groups in a fixed order: each class as taken, then species, background, feats.
+  const groups = new Map();
+  for (const c of s.classes) groups.set(`class:${c.id}`, { title: `${c.name} ${c.level}`, sub: c.subclassName, items: [] });
+  groups.set("species", { title: `${f.snapshot.species?.[f.build.species]?.name ?? "Species"} traits`, items: [] });
+  groups.set("background", { title: f.snapshot.backgrounds?.[f.build.background]?.name ?? "Background", items: [] });
+  groups.set("feats", { title: "Feats", items: [] });
+  groups.set("other", { title: "Other", items: [] });
+  for (const feat of s.features) {
+    const g = featureGroup(feat, f.snapshot);
+    if (!groups.has(g)) groups.set(g, { title: titleCase(g.replace(/^class:/, "")), items: [] });
+    groups.get(g).items.push(feat);
+  }
+  // Class features in level order, subclass features slotted in where they're gained.
+  for (const [k, g] of groups) if (k.startsWith("class:")) g.items.sort((a, b) => (a.level ?? 0) - (b.level ?? 0));
   const featEntries = s.feats.map(x => ({ ...x, entry: f.snapshot.feats?.[x.id] }));
+  const featFeatureNames = new Set(featEntries.map(x => x.name));
   const row = (id, name, sourceText, body, chips = "") => {
     const open = ui.open.has(id);
     return `<li class="feature-row ${open ? "open" : ""}">
@@ -441,12 +457,38 @@ function renderFeatures(s, p, f) {
     </li>`;
   };
   const strip = t => String(t ?? "").replace(/^\s*#{1,6}\s+.*\n+/, "");
-  return `<section class="panel"><h2>Features and traits</h2>
-    ${Object.entries(groups).filter(([, list]) => list.length).map(([g, list]) => `
-      <h3 class="group-title">${esc(titles[g])}</h3>
-      <ul class="feature-rows">${list.map(x => row(`f:${x.key}`, x.name, x.source, featureBody(x), featureChips(x))).join("")}</ul>`).join("")}
-    ${featEntries.length ? `<h3 class="group-title">Feats</h3><ul class="feature-rows">${featEntries.map(x =>
-      row(`feat:${x.key}`, x.name, `from ${x.source}`, md(strip(x.entry?.text)))).join("")}</ul>` : ""}
+  // "Monk, level 5" reads as "Level 5" under a Monk heading; subclass features keep their subclass name.
+  const where = (x, g) => {
+    if (!g.startsWith("class:") || x.level == null) return x.source;
+    const by = x.source.replace(/, level \d+$/, "");
+    return `Level ${x.level}${by !== groups.get(g).title.replace(/ \d+$/, "") ? ` · ${by}` : ""}`;
+  };
+  const section = (key, title, sub, count, body) => {
+    const closed = ui.closedGroups.has(key);
+    return `<div class="feature-group ${closed ? "closed" : ""}">
+      <button type="button" class="group-toggle" data-group="${esc(key)}" aria-expanded="${!closed}">
+        <span class="group-title">${esc(title)}${sub ? ` <span class="group-sub">${esc(sub)}</span>` : ""}</span>
+        <span class="muted">${count}</span></button>
+      ${closed ? "" : body}
+    </div>`;
+  };
+  const out = [];
+  for (const [key, g] of groups) {
+    if (key === "feats") {
+      const extra = g.items.filter(x => !featFeatureNames.has(x.name)); // a feat's own feature repeats the feat
+      const n = featEntries.length + extra.length;
+      if (!n) continue;
+      out.push(section(key, g.title, null, n, `<ul class="feature-rows">${featEntries.map(x =>
+        row(`feat:${x.key}`, x.name, `from ${x.source}`, `${(() => { const ff = g.items.find(i => i.name === x.name); return ff ? featureBody({ ...ff, text: "" }) : ""; })()}${md(strip(x.entry?.text))}`, featureChips(g.items.find(i => i.name === x.name) ?? {}))).join("")}
+        ${extra.map(x => row(`f:${x.key}`, x.name, x.source, featureBody(x), featureChips(x))).join("")}</ul>`));
+      continue;
+    }
+    if (!g.items.length) continue;
+    out.push(section(key, g.title, g.sub, g.items.length, `<ul class="feature-rows">${g.items.map(x => row(`f:${x.key}`, x.name, where(x, key), featureBody(x), featureChips(x))).join("")}</ul>`));
+  }
+  return `<section class="panel features-panel"><div class="panel-head"><h2>Features and traits</h2>
+      <span class="panel-tools"><button type="button" class="link-btn" data-groups="open">Expand all</button> · <button type="button" class="link-btn" data-groups="close">Collapse all</button></span></div>
+    ${out.join("")}
   </section>`;
 }
 
@@ -589,6 +631,12 @@ function onClick(e) {
   }
   if (d.levelup !== undefined) { location.hash = "#/levelup"; return; }
   if (d.refreshContent !== undefined) return refreshContent(s);
+  if (d.group) { ui.closedGroups.has(d.group) ? ui.closedGroups.delete(d.group) : ui.closedGroups.add(d.group); render(); return; }
+  if (d.groups) {
+    const keys = [...root.querySelectorAll("[data-group]")].map(b => b.dataset.group);
+    if (d.groups === "close") keys.forEach(k => ui.closedGroups.add(k)); else ui.closedGroups.clear();
+    render(); return;
+  }
   if (d.toggle) { ui.open.has(d.toggle) ? ui.open.delete(d.toggle) : ui.open.add(d.toggle); render(); return; }
   if (d.slot) return change(p => togglePip(p.slotsUsed, d.slot, Number(d.i)));
   if (d.pact !== undefined) return change(p => { p.pactUsed = Number(d.i) < p.pactUsed ? Number(d.i) : Number(d.i) + 1; });

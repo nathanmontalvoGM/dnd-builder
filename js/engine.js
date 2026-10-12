@@ -343,7 +343,7 @@ function apply(ctx, g, scope, into, classLevel) {
       out.features.push({
         name: g.name, text: variant && g.variants ? g.variants[variant] : g.text, source,
         action: g.action, uses: g.uses ? { ...g.uses, max: evalFormula(g.uses.max, ctx, scope) } : null,
-        dice: g.dice, die, stats, while: cond, bonus: g.bonus, key: `${scope.path}/${g.name}`,
+        dice: g.dice, die, stats, while: cond, bonus: g.bonus, key: `${scope.path}/${g.name}`, level: classLevel ?? null,
       });
       for (const a of g.advantage ?? []) out.advantages.push({ ...a, source: g.name, while: a.while ?? cond });
       if (g.resistances?.length) out.resistances.push({ damage: g.resistances, source: g.name, while: cond });
