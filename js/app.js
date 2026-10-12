@@ -1,7 +1,7 @@
 import { getPack, savePack, removePack } from "./store.js";
 import { KINDS, renderEntry, listSecondary, esc, titleCase, spellLevelLabel } from "./render.js";
 import { mountWizard, mountLevelUp, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
-import { mountSheet, unmountSheet, validateCharacter, openCharacter, restoreCharacter, currentCharacter, hasUnsavedChanges } from "./sheet.js";
+import { mountSheet, unmountSheet, setSheetPack, validateCharacter, openCharacter, restoreCharacter, currentCharacter, hasUnsavedChanges } from "./sheet.js";
 
 const SUPPORTED_FORMAT = 1;
 const $ = sel => document.querySelector(sel);
@@ -53,6 +53,8 @@ async function loadFile(file) {
   try { await savePack(data); }
   catch { toast("The pack loaded but couldn't be saved in this browser, so you'll need to load it again next visit. Private browsing windows block saving.", "error"); }
   pack = data;
+  setSheetPack(pack);
+  if (sheetMounted) { unmountSheet(); sheetMounted = false; }
   if (wizardMounted) { unmountWizard(); wizardMounted = false; } // remount against the new pack
   toast(`Loaded content pack ${data.meta.version}`);
   render();
@@ -255,6 +257,7 @@ $("#btn-remove").addEventListener("click", async () => {
   if (!confirm("Remove the content pack from this browser? Your exported character files aren't affected.")) return;
   await removePack().catch(() => {});
   pack = null;
+  setSheetPack(null);
   history.replaceState(null, "", "#/");
   toast("Content pack removed");
   render();
@@ -296,5 +299,6 @@ window.addEventListener("drop", e => {
 
 pack = await getPack();
 if (pack && validatePack(pack)) pack = null;
+setSheetPack(pack);
 restoreCharacter();
 render();

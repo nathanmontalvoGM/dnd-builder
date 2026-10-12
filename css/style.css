@@ -648,3 +648,33 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
   font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
   border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.35em 0.5em;
 }
+
+/* Armor toggles and AC method */
+.armor-box { grid-column: span 2; text-align: left; gap: 0.35rem; }
+.armor-box .armor-controls { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
+.armor-box label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--ink); }
+.armor-box select { font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.15em 0.35em; max-width: 100%; }
+.armor-box small { text-align: left; }
+
+/* Advantage markers on saves, skills and initiative */
+.adv { display: inline-block; margin-left: 0.35rem; padding: 0 0.3rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; line-height: 1.4; letter-spacing: 0.02em; color: var(--verdigris); border: 1px solid currentColor; vertical-align: 1px; cursor: help; }
+.adv.adv-cond { color: var(--muted); border-style: dashed; }
+
+/* Numbers on feature rows and the At a glance panel */
+.chips { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; margin-left: 0.5rem; vertical-align: middle; }
+.chip-sm { font-size: 0.75rem; padding: 0.05rem 0.4rem; border-radius: 999px; background: var(--gilt-soft); color: var(--ink); white-space: nowrap; }
+.feature-facts { margin-bottom: 0.6rem; }
+.glance { grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
+.glance dd .muted { font-size: 0.8rem; }
+.attack-table.computed { margin-bottom: 0.75rem; }
+.attack-table.computed th { text-align: left; font-weight: 600; }
+.attack-table.computed td, .attack-table.computed th { padding: 0.35rem 0.5rem 0.35rem 0; }
+
+/* Older content pack notice */
+.update-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; border: 1px solid var(--rule); background: var(--surface); border-radius: var(--radius); padding: 0.6rem 0.9rem; margin-bottom: 1rem; }
+.update-note p { margin: 0; color: var(--muted); }
+.armor-box { min-width: 0; }
+.armor-box label.ac-from { display: grid; gap: 0.2rem; width: 100%; }
+.armor-box label.ac-from select { width: 100%; }
+.attack-table.computed th, .attack-table.computed td:nth-child(2), .attack-table.computed td:nth-child(3) { white-space: nowrap; }
+.attack-table.computed th { font-size: 1rem; color: var(--ink); }

@@ -22,6 +22,25 @@ export function emptyBuild() {
   };
 }
 
+// The character's own snapshot fills in anything the loaded pack no longer has (homebrew, renamed notes).
+export function mergeContent(contentPack, snapshot = {}) {
+  const out = { ...contentPack };
+  for (const bucket of new Set([...Object.keys(snapshot), ...Object.keys(contentPack)])) {
+    if (bucket === "meta") continue;
+    out[bucket] = { ...(snapshot[bucket] ?? {}), ...(contentPack[bucket] ?? {}) };
+  }
+  return out;
+}
+
+// The content a character file keeps: every entry its build uses.
+export function snapshotFor(res, pack) {
+  const snapshot = {};
+  for (const [bucket, ids] of Object.entries(res.sources)) {
+    snapshot[bucket] = Object.fromEntries([...ids].filter(id => pack[bucket]?.[id]).map(id => [id, pack[bucket][id]]));
+  }
+  return snapshot;
+}
+
 // ---------- classes ----------
 // Builds made before multiclassing stored one `class`/`subclass` plus `level`. This turns either
 // shape into the current one without touching the original object.
@@ -157,7 +176,8 @@ function resolvePass(build, pack, scores) {
     decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [] },
     features: [], proficiencies: { skill: [], save: [], armor: [], weapon: [], tool: [], language: [] },
     expertise: [], stats: {}, resources: {}, spells: [], feats: [], warnings: [], missing: new Set(),
-    asi: [], notes: [], sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
+    asi: [], notes: [], acFormulas: [], conditionalStats: [], advantages: [], resistances: [], unarmed: [], damageBonuses: [],
+    sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
   };
   const level = Math.min(20, Math.max(1, build.level || 1));
   const ctx = { build, pack, out, level, scores: scores ?? Object.fromEntries(ABILITY_KEYS.map(a => [a, baseScores(build)[a] ?? 10])) };
@@ -316,11 +336,19 @@ function apply(ctx, g, scope, into, classLevel) {
         break;
       }
       const variant = g.by_choice ? asArray(scope.choices.get(g.by_choice))[0] : null;
+      const lvl = scope.classLevel ?? ctx.level;
+      const cond = g.while ?? null;
+      const stats = (g.stats ?? []).map(st => ({ label: st.label, value: evalTemplate(st.value, ctx, scope) }));
+      const die = g.dice ? diceAt(g.dice, lvl) : null;
       out.features.push({
         name: g.name, text: variant && g.variants ? g.variants[variant] : g.text, source,
         action: g.action, uses: g.uses ? { ...g.uses, max: evalFormula(g.uses.max, ctx, scope) } : null,
-        dice: g.dice, bonus: g.bonus, key: `${scope.path}/${g.name}`,
+        dice: g.dice, die, stats, while: cond, bonus: g.bonus, key: `${scope.path}/${g.name}`,
       });
+      for (const a of g.advantage ?? []) out.advantages.push({ ...a, source: g.name, while: a.while ?? cond });
+      if (g.resistances?.length) out.resistances.push({ damage: g.resistances, source: g.name, while: cond });
+      if (g.unarmed_strike) out.unarmed.push({ source: g.name, die: evalTemplate(g.unarmed_strike.die, ctx, scope), abilities: g.unarmed_strike.abilities ?? ["str"] });
+      if (g.damage_bonus) out.damageBonuses.push({ source: g.name, value: evalFormula(g.damage_bonus.value, ctx, scope), abilities: g.damage_bonus.abilities ?? null, while: cond });
       if (g.bonus?.checks) (out.bonuses ??= []).push({ checks: g.bonus.checks, value: evalFormula(g.bonus.value, ctx, scope), source: g.name });
       if (g.bonus?.initiative != null) out.initiativeBonus = (out.initiativeBonus ?? 0) + (evalFormula(g.bonus.initiative, ctx, scope) ?? 0);
       break;
@@ -333,12 +361,18 @@ function apply(ctx, g, scope, into, classLevel) {
       break;
     case "stat": {
       const v = resolveRef(g.value, scope);
+      // Bonuses that only apply out of armor (Unarmored Movement, Fast Movement) are still added here;
+      // the sheet takes them back off when its armor toggles say they don't apply.
+      if (g.requires) out.conditionalStats.push({ stat: g.stat, value: v, requires: g.requires, source });
       const cur = out.stats[g.stat];
       if (g.mode === "max") out.stats[g.stat] = Math.max(cur ?? 0, v);
       else if (g.mode === "add") out.stats[g.stat] = (cur ?? 0) + v;
       else out.stats[g.stat] = v;
       break;
     }
+    case "ac_formula":
+      out.acFormulas.push({ name: g.name ?? source, base: g.base ?? 10, add: g.add ?? [], armor: g.armor ?? "none", shield: g.shield !== false, source });
+      break;
     case "resource":
       out.resources[g.id] = { ...out.resources[g.id], ...g, max: evalFormula(g.max, ctx, scope), source };
       break;
@@ -524,6 +558,7 @@ function makeDecision(d) {
   return { children: [], complete, ...d };
 }
 
+const signedStr = n => (n >= 0 ? `+${n}` : `${n}`);
 const prettyValue = v => (v in ABILITIES ? ABILITIES[v] : titleCase(v));
 
 // ---------- formulas ----------
@@ -542,6 +577,29 @@ function evalFormula(f, ctx, scope) {
   const expr = f.replace(/table\.(\w+)/g, (_, c) => String(cls?.table?.[c]?.[lvl - 1] ?? 0))
     .replace(/[A-Za-z_]\w*/g, t => t in vars ? String(vars[t]) : (["min", "max", "floor", "ceil"].includes(t) ? `Math.${t}` : "0"));
   try { return Function(`"use strict"; return (${expr});`)(); } catch { return null; }
+}
+
+// "Text with {formula} parts". A part that is just `table.<column>` keeps its raw value, so dice
+// columns like "1d10" come through as text.
+function evalTemplate(t, ctx, scope) {
+  if (t == null) return null;
+  if (typeof t === "number") return t;
+  const cls = scope.cls ?? ctx.pack.classes?.[ctx.build.classes[0]?.id];
+  const lvl = scope.classLevel ?? ctx.level;
+  return String(t).replace(/\{([^}]+)\}/g, (_, expr) => {
+    const e = expr.trim();
+    const m = e.match(/^table\.(\w+)$/);
+    if (m) return String(cls?.table?.[m[1]]?.[lvl - 1] ?? "");
+    const v = evalFormula(e, ctx, scope);
+    return v == null ? "?" : String(v);
+  });
+}
+
+// Scaling dice like { 1: 1d6, 5: 1d8 }: the entry for the highest level reached.
+function diceAt(dice, level) {
+  let out = null;
+  for (const [k, v] of Object.entries(dice).sort(([a], [b]) => Number(a) - Number(b))) if (level >= Number(k)) out = v;
+  return out;
 }
 
 // ---------- ability scores ----------
@@ -710,10 +768,38 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     attack: s.cast_ability ? pb + mods[s.cast_ability] : null,
   }));
 
+  // Armor Class: every way this character can calculate it. The sheet picks one (best by default),
+  // filtered by its armor and shield toggles. "No armor" (10 + Dex) is always available.
+  const acOptions = [{ name: "No armor", value: 10 + mods.dex, armor: "none", shield: true, source: "Core rules" },
+    ...res.acFormulas.map(a => ({ ...a, value: a.base + a.add.reduce((n, ab) => n + mods[ab], 0) }))];
+
+  // Advantages: marked on saves and skills, plus a list for the conditional ones.
+  const advFor = (on, ability, skill) => res.advantages.filter(a => a.on === on
+    && (!a.abilities || a.abilities.includes(ability)) && (!a.skills || (skill && a.skills.includes(skill))));
+  const advNote = a => (a.vs ? `against ${a.vs}` : a.while ? `while ${a.while}` : null);
+  for (const sv of saves) sv.advantage = advFor("save", sv.ability).map(a => ({ source: a.source, note: advNote(a) }));
+  for (const sk of skills) sk.advantage = advFor("check", sk.ability, sk.name).map(a => ({ source: a.source, note: advNote(a) }));
+
+  // Unarmed Strike: everyone has one (1 + Str). Features like Martial Arts swap the die and ability.
+  const unarmedSources = res.unarmed.length ? res.unarmed : [{ source: "Core rules", die: null, abilities: ["str"] }];
+  const best = unarmedSources.map(u => {
+    const ab = u.abilities.reduce((x, y) => (mods[y] > mods[x] ? y : x), u.abilities[0]);
+    return { ...u, ability: ab, mod: mods[ab] };
+  }).sort((a, b) => b.mod - a.mod || (b.die ? 1 : 0) - (a.die ? 1 : 0))[0];
+  const dmgBonuses = res.damageBonuses.filter(d => !d.abilities || d.abilities.includes(best.ability));
+  const unarmed = {
+    name: "Unarmed Strike", attack: pb + best.mod, ability: best.ability,
+    damage: best.die ? `${best.die}${best.mod ? signedStr(best.mod) : ""}` : String(Math.max(1, 1 + best.mod)),
+    type: "Bludgeoning", source: best.source,
+    notes: dmgBonuses.map(d => `${signedStr(d.value)} ${d.while ? `while ${d.while}` : ""} (${d.source})`.replace(/\s+/g, " ")),
+  };
+
   return {
+    initiativeAdvantage: res.advantages.filter(a => a.on === "initiative").map(a => ({ source: a.source, note: a.vs ? `against ${a.vs}` : a.while ? `while ${a.while}` : null })),
+    acOptions, unarmed, conditionalStats: res.conditionalStats, resistances: res.resistances, advantages: res.advantages,
     level, scores, mods, pb, skills, saves, hp, hitDie: cls?.hit_die ?? 8, hitDice,
     classes: classes.map(c => ({ id: c.id, name: c.entry.name, level: c.level, subclass: c.subclass, subclassName: pack.subclasses?.[c.subclass]?.name ?? null })),
-    ac: 10 + mods.dex, initiative: mods.dex + (res.initiativeBonus ?? 0),
+    ac: Math.max(...acOptions.filter(o => o.armor === "none").map(o => o.value)), initiative: mods.dex + (res.initiativeBonus ?? 0),
     speed: res.stats.speed ?? 30, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
     passivePerception: 10 + skills.find(s => s.name === "Perception").bonus,
     proficiencies: res.proficiencies, features: res.features, feats: res.feats, resources, spells, spellcasting, gold,

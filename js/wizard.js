@@ -1,6 +1,6 @@
 // The character creation wizard. All state lives in `draft`; every change re-runs the
 // engine and re-renders, so what's on screen is always what the rules say.
-import { resolve, summarize, emptyBuild, normalizeBuild, setStartingClass, setTotalLevel, setSubclass, addClass, removeClass, changeClass, setClassLevel, levelUp, multiclassBlockers, finalScores, allDecisions, baseScores, asiIncrements, titleCase } from "./engine.js";
+import { resolve, summarize, emptyBuild, normalizeBuild, setStartingClass, setTotalLevel, setSubclass, addClass, removeClass, changeClass, setClassLevel, levelUp, multiclassBlockers, mergeContent, snapshotFor, finalScores, allDecisions, baseScores, asiIncrements, titleCase } from "./engine.js";
 import { esc, md, renderGrants, makeLinker } from "./render.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, STANDARD_ARRAY, POINT_BUY, ALIGNMENTS, mod, signed, ordinal } from "./rules.js";
 
@@ -688,20 +688,10 @@ const LU_STEPS = [
   { id: "lu-review", title: "Review" },
 ];
 
-// The character's own snapshot fills in anything the loaded pack no longer has (homebrew, renamed notes).
-function mergedPack(contentPack, snapshot = {}) {
-  const out = { ...contentPack };
-  for (const bucket of new Set([...Object.keys(snapshot), ...Object.keys(contentPack)])) {
-    if (bucket === "meta") continue;
-    out[bucket] = { ...(snapshot[bucket] ?? {}), ...(contentPack[bucket] ?? {}) };
-  }
-  return out;
-}
-
 export function mountLevelUp(el, contentPack, file) {
   root = el;
   mode = "levelup";
-  pack = mergedPack(contentPack, file.snapshot);
+  pack = mergeContent(contentPack, file.snapshot);
   const base = normalizeBuild(file.build);
   const res0 = resolve(base, pack);
   lu = { file, base, res0, sum0: summarize(base, pack, res0), done0: new Set(allDecisions(res0).filter(d => d.complete).map(d => d.key)) };
@@ -848,10 +838,7 @@ function applyLevelUp() {
   const res = resolve(draft.build, pack);
   const sum = summarize(draft.build, pack, res);
   if (newWarnings(res).length && !draft.build.overrides) return;
-  const snapshot = {};
-  for (const [bucket, ids] of Object.entries(res.sources)) {
-    snapshot[bucket] = Object.fromEntries([...ids].filter(id => pack[bucket]?.[id]).map(id => [id, pack[bucket][id]]));
-  }
+  const snapshot = snapshotFor(res, pack);
   const f = structuredClone(lu.file);
   f.format = 2;
   f.build = normalizeBuild({ ...draft.build, overrides: !!(lu.file.build?.overrides || draft.build.overrides) });

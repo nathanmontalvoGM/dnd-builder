@@ -1,7 +1,7 @@
 // The character sheet. Everything it shows is computed from the character file's own
 // snapshot of the content, so content-pack updates never change a finished character.
 // Only `play` (HP, used slots, gear, notes) changes here; the build is read-only.
-import { summarize, normalizeBuild, titleCase } from "./engine.js";
+import { summarize, resolve, normalizeBuild, mergeContent, snapshotFor, titleCase } from "./engine.js";
 import { esc, md } from "./render.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal } from "./rules.js";
 
@@ -9,6 +9,8 @@ const OPEN_KEY = "character-builder:sheet";
 const COINS = ["cp", "sp", "ep", "gp", "pp"];
 
 let state = null; // { file, dirty }
+let loadedPack = null; // the content pack in this browser, for "update content"
+export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
 const ui = { open: new Set() }; // expanded feature/spell rows
 
@@ -81,6 +83,9 @@ function ensurePlay() {
   p.featureUses ??= {};
   p.freeCastUsed ??= {};
   p.ac ??= null;
+  p.armor ??= "none";      // none | light | medium | heavy
+  p.shield ??= false;
+  p.acMethod ??= null;     // name of the chosen AC calculation, null = best
   p.attacks ??= [];
   p.equipment ??= startingEquipmentText();
   p.coins ??= { cp: 0, sp: 0, ep: 0, gp: s.gold ?? 0, pp: 0 };
@@ -156,8 +161,9 @@ function render() {
   const species = f.snapshot.species?.[b.species];
   const bg = f.snapshot.backgrounds?.[b.background];
   const exh = p.exhaustion ?? 0;
-  const speed = Math.max(0, s.speed - 5 * exh);
-  const ac = p.ac ?? s.ac;
+  const armorState = armorView(s, p);
+  const speed = Math.max(0, armorState.speed - 5 * exh);
+  const ac = p.ac ?? armorState.ac;
   const hpMax = s.hp ?? 0;
 
   root.innerHTML = `
@@ -175,15 +181,19 @@ function render() {
         <button type="button" class="btn btn-quiet" data-close>Close</button>
       </div>
     </header>
+    ${loadedPack && loadedPack.meta?.version !== f.pack?.version ? `<div class="update-note">
+      <p>Built with content pack ${esc(f.pack?.version ?? "unknown")}. The pack loaded here is ${esc(loadedPack.meta?.version)}.</p>
+      <button type="button" class="btn" data-refresh-content>Update this character's content</button>
+    </div>` : ""}
 
     <section class="combat-strip" aria-label="Combat">
       <div class="stat-box ac-box">
         <label for="ac-input">Armor class</label>
-        <input id="ac-input" type="number" data-play="ac" data-focus="ac" value="${ac}" min="0" max="40">
-        <small>${p.ac == null ? "unarmored" : `<button type="button" class="link-btn" data-ac-reset>reset to ${s.ac}</button>`}</small>
+        <input id="ac-input" type="number" data-play="ac" data-focus="ac" value="${ac ?? ""}" placeholder="?" min="0" max="40">
+        <small>${p.ac != null ? `<button type="button" class="link-btn" data-ac-reset>${armorState.ac == null ? "clear" : `reset to ${armorState.ac}`}</button>` : armorState.ac == null ? "enter armor AC" : esc(armorState.label)}</small>
       </div>
-      <div class="stat-box"><span class="label">Initiative</span><strong>${signed(s.initiative - 2 * exh)}</strong></div>
-      <div class="stat-box"><span class="label">Speed</span><strong>${speed} ft</strong>${exh ? `<small>−${5 * exh} from exhaustion</small>` : ""}</div>
+      <div class="stat-box"><span class="label">Initiative</span><strong>${signed(s.initiative - 2 * exh)}</strong>${s.initiativeAdvantage.length ? `<small>${advBadge(s.initiativeAdvantage)} Advantage</small>` : ""}</div>
+      <div class="stat-box"><span class="label">Speed</span><strong>${speed} ft</strong>${armorState.speedLost ? `<small>−${armorState.speedLost} ${armorState.why}</small>` : ""}${exh ? `<small>−${5 * exh} from exhaustion</small>` : ""}</div>
       <div class="stat-box"><span class="label">Proficiency</span><strong>${signed(s.pb)}</strong></div>
       <div class="stat-box"><span class="label">Passive Perception</span><strong>${s.passivePerception}</strong></div>
       <div class="stat-box"><span class="label">Size</span><strong class="small-value">${esc(s.size ?? "Medium")}</strong>${s.darkvision ? `<small>Darkvision ${s.darkvision} ft</small>` : ""}</div>
@@ -225,6 +235,15 @@ function render() {
           <button type="button" class="step-btn" data-exh="1" ${exh >= 6 ? "disabled" : ""} aria-label="Add a level of exhaustion">+</button></span>
         ${exh ? `<small>−${2 * exh} to d20 tests</small>` : ""}
       </div>
+      <div class="stat-box armor-box">
+        <span class="label">Armor and AC</span>
+        <div class="armor-controls">
+          <label>Armor <select data-armor aria-label="Armor worn">${["none", "light", "medium", "heavy"].map(a => `<option value="${a}" ${p.armor === a ? "selected" : ""}>${a === "none" ? "None" : titleCase(a)}</option>`).join("")}</select></label>
+          <label class="check"><input type="checkbox" data-shield ${p.shield ? "checked" : ""}> Shield</label>
+        </div>
+        ${armorState.options.length > 1 ? `<label class="ac-from">AC from <select data-ac-method aria-label="How AC is calculated">${armorState.options.map(o => `<option value="${esc(o.name)}" ${o.name === armorState.method ? "selected" : ""}>${esc(o.name)} (${o.value + (p.shield ? 2 : 0)})</option>`).join("")}</select></label>` : ""}
+        ${armorState.note ? `<small>${esc(armorState.note)}</small>` : ""}
+      </div>
     </section>
 
     <div class="sheet-grid">
@@ -235,15 +254,16 @@ function render() {
           return `<div class="ability-block">
             <div class="ability-top"><h3>${ABILITIES[a]}</h3><span class="ability-mod">${signed(s.mods[a])}</span><span class="ability-score">${s.scores[a]}</span></div>
             <ul>
-              <li class="${save.prof ? "prof" : ""}"><span class="dot" aria-label="${save.prof ? "proficient" : "not proficient"}"></span>Saving throw<span class="val">${signed(save.bonus)}</span></li>
-              ${skills.map(k => `<li class="${k.prof ? "prof" : ""} ${k.expertise ? "expert" : ""}"><span class="dot" aria-label="${k.expertise ? "expertise" : k.prof ? "proficient" : "not proficient"}"></span>${esc(k.name)}<span class="val">${signed(k.bonus)}</span></li>`).join("")}
+              <li class="${save.prof ? "prof" : ""}"><span class="dot" aria-label="${save.prof ? "proficient" : "not proficient"}"></span>Saving throw${advBadge(save.advantage)}<span class="val">${signed(save.bonus)}</span></li>
+              ${skills.map(k => `<li class="${k.prof ? "prof" : ""} ${k.expertise ? "expert" : ""}"><span class="dot" aria-label="${k.expertise ? "expertise" : k.prof ? "proficient" : "not proficient"}"></span>${esc(k.name)}${advBadge(k.advantage)}<span class="val">${signed(k.bonus)}</span></li>`).join("")}
             </ul>
           </div>`;
         }).join("")}
       </section>
 
       <div class="main-col">
-        ${renderAttacks(p)}
+        ${renderAttacks(s, p)}
+        ${renderClassStats(s)}
         ${renderResources(s, p)}
         ${renderFeatures(s, p, f)}
       </div>
@@ -257,6 +277,7 @@ function render() {
             <div><dt>Languages</dt><dd>${esc(uniq(s.proficiencies.language).join(", "))}</dd></div>
           </dl>
         </section>
+        ${renderDefenses(s)}
         <section class="panel"><h2>Equipment</h2>
           <label class="visually-hidden" for="equip">Equipment</label>
           <textarea id="equip" rows="10" data-play="equipment" data-focus="equipment" placeholder="One item per line">${esc(p.equipment)}</textarea>
@@ -283,10 +304,100 @@ function render() {
   }
 }
 
+// ---------- content updates ----------
+// Re-read the class, species, feat and spell entries this character uses from the loaded pack.
+// Choices stay as they are. If max HP changes, current HP moves by the same amount.
+function refreshContent(before) {
+  if (!loadedPack || !confirm("Update this character's rules text and numbers from the loaded content pack? Your choices stay the same. Save the file afterward to keep it.")) return;
+  const f = state.file;
+  const merged = mergeContent(loadedPack, f.snapshot);
+  const res = resolve(f.build, merged);
+  change((p, file) => {
+    file.snapshot = snapshotFor(res, merged);
+    file.pack = { version: loadedPack.meta?.version, built: loadedPack.meta?.built };
+    const after = summarize(file.build, { meta: {}, ...file.snapshot });
+    const delta = (after.hp ?? 0) - (before.hp ?? 0);
+    p.hp.current = Math.max(0, Math.min(after.hp ?? 0, p.hp.current + delta));
+  });
+}
+
+// ---------- armor, AC and conditional speed ----------
+// Which AC calculations apply with the armor and shield toggles, which one is used, and the
+// speed bonuses that switch off in armor (Unarmored Movement) or heavy armor (Fast Movement).
+function armorView(s, p) {
+  const armored = p.armor && p.armor !== "none";
+  const options = armored ? [] : s.acOptions.filter(o => o.armor === "none" && (!p.shield || o.shield));
+  const best = options.slice().sort((a, b) => b.value - a.value)[0];
+  const chosen = options.find(o => o.name === p.acMethod) ?? best;
+  const ac = chosen ? chosen.value + (p.shield ? 2 : 0) : null;
+  const fails = req => ({
+    no_armor: armored, no_heavy_armor: p.armor === "heavy", no_shield: !!p.shield, unarmored: armored || !!p.shield,
+  })[req] ?? false;
+  const speedLost = (s.conditionalStats ?? []).filter(c => c.stat === "speed" && fails(c.requires)).reduce((n, c) => n + (c.value ?? 0), 0);
+  const lostAc = s.acOptions.filter(o => o.armor === "none" && !options.includes(o) && o.source !== "Core rules").map(o => o.name);
+  const note = armored ? "Your armor sets your AC; type it in the box."
+    : lostAc.length ? `${lostAc.join(", ")} doesn't work with a shield.` : "";
+  const why = armored ? "in armor" : "with a shield";
+  return { why, options, method: chosen?.name ?? null, ac, label: chosen ? `${chosen.name}${p.shield ? " + shield" : ""}` : "", speed: s.speed - speedLost, speedLost, note };
+}
+
+// Advantage marker for a save, skill or initiative. Conditional ones get an asterisk and a tooltip.
+function advBadge(list) {
+  if (!list?.length) return "";
+  const always = list.some(a => !a.note);
+  const tip = list.map(a => `${a.source}${a.note ? `: ${a.note}` : ""}`).join("; ");
+  return ` <span class="adv ${always ? "" : "adv-cond"}" title="Advantage (${esc(tip)})">Adv${always ? "" : "*"}</span>`;
+}
+
+// Numbers a feature carries (save DC, damage, its table column), shown on its row.
+function featureChips(f) {
+  const bits = [...(f.die ? [f.die] : []), ...(f.stats ?? []).map(st => `${st.label} ${st.value}`)];
+  return bits.length ? ` <span class="chips">${bits.map(b => `<span class="chip-sm">${esc(b)}</span>`).join("")}</span>` : "";
+}
+function featureBody(f) {
+  const facts = [...(f.die ? [["Die", f.die]] : []), ...(f.stats ?? []).map(st => [st.label, st.value])];
+  return `${facts.length ? `<dl class="facts compact feature-facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}${f.while ? `<div><dt>Applies</dt><dd>while ${esc(f.while)}</dd></div>` : ""}</dl>` : ""}${md(f.text)}`;
+}
+
+// Every number features carry, in one place: Martial Arts die, save DCs, Rage damage and so on.
+function renderClassStats(s) {
+  const rows = new Map();
+  for (const f of s.features) {
+    for (const st of f.stats ?? []) {
+      const k = `${st.label}|${st.value}`;
+      if (!rows.has(k)) rows.set(k, { label: st.label, value: st.value, from: [] });
+      rows.get(k).from.push(f.name);
+    }
+    if (f.die) { const k = `die|${f.name}`; rows.set(k, { label: `${f.name} die`, value: f.die, from: [f.name] }); }
+  }
+  if (!rows.size) return "";
+  return `<section class="panel"><h2>At a glance</h2><dl class="facts compact glance">${[...rows.values()].map(r =>
+    `<div><dt>${esc(r.label)}</dt><dd>${esc(r.value)}${r.from.length && !(r.from.length === 1 && r.label.startsWith(r.from[0])) ? ` <span class="muted">${esc(r.from.join(", "))}</span>` : ""}</dd></div>`).join("")}</dl></section>`;
+}
+
+// Resistances and the advantages that only apply in some situations.
+function renderDefenses(s) {
+  const res = s.resistances ?? [];
+  const adv = (s.advantages ?? []).filter(a => a.vs || a.while || a.on === "check");
+  if (!res.length && !adv.length) return "";
+  const what = a => a.on === "save" ? `${a.abilities ? a.abilities.map(x => ABBR[x]).join(", ") + " saves" : "Saves"}${a.vs ? ` against ${a.vs}` : ""}`
+    : a.on === "check" ? `${a.abilities ? a.abilities.map(x => ABBR[x]).join(", ") + " checks" : "Checks"}${a.vs ? ` for ${a.vs}` : ""}`
+    : a.on === "initiative" ? "Initiative" : "Attacks";
+  return `<section class="panel"><h2>Defenses</h2><dl class="facts compact one-col">
+    ${res.map(r => `<div><dt>Resistance${r.while ? ` while ${esc(r.while)}` : ""}</dt><dd>${esc(r.damage.join(", "))} <span class="muted">${esc(r.source)}</span></dd></div>`).join("")}
+    ${adv.map(a => `<div><dt>Advantage${a.while ? ` while ${esc(a.while)}` : ""}</dt><dd>${esc(what(a))} <span class="muted">${esc(a.source)}</span></dd></div>`).join("")}
+  </dl></section>`;
+}
+
 const uniq = arr => [...new Set(arr.map(x => x.value ?? x))];
 
-function renderAttacks(p) {
+function renderAttacks(s, p) {
+  const u = s.unarmed;
   return `<section class="panel"><h2>Weapons and attacks</h2>
+    <table class="attack-table computed"><tbody><tr>
+      <th scope="row">${esc(u.name)}</th><td>${signed(u.attack)}</td><td>${esc(`${u.damage} ${u.type}`)}</td>
+      <td class="muted">${esc([u.source !== "Core rules" ? `${u.source}, ${ABILITIES[u.ability]}` : ABILITIES[u.ability], ...u.notes].join("; "))}</td>
+    </tr></tbody></table>
     ${p.attacks.length ? `<table class="attack-table">
       <thead><tr><th scope="col">Name</th><th scope="col">Attack</th><th scope="col">Damage</th><th scope="col">Notes</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
       <tbody>${p.attacks.map((a, i) => `<tr>
@@ -322,10 +433,10 @@ function renderFeatures(s, p, f) {
   for (const feat of s.features) groups[featureGroup(feat)].push(feat);
   const titles = { class: "Class features", species: `${f.snapshot.species?.[f.build.species]?.name ?? "Species"} traits`, background: "Background", feats: "Feat features" };
   const featEntries = s.feats.map(x => ({ ...x, entry: f.snapshot.feats?.[x.id] }));
-  const row = (id, name, sourceText, body) => {
+  const row = (id, name, sourceText, body, chips = "") => {
     const open = ui.open.has(id);
     return `<li class="feature-row ${open ? "open" : ""}">
-      <button type="button" class="feature-toggle" data-toggle="${esc(id)}" aria-expanded="${open}"><span>${esc(name)}</span><span class="muted">${esc(sourceText)}</span></button>
+      <button type="button" class="feature-toggle" data-toggle="${esc(id)}" aria-expanded="${open}"><span>${esc(name)}${chips}</span><span class="muted">${esc(sourceText)}</span></button>
       ${open ? `<div class="feature-body">${body || `<p class="muted">No description in the content snapshot.</p>`}</div>` : ""}
     </li>`;
   };
@@ -333,7 +444,7 @@ function renderFeatures(s, p, f) {
   return `<section class="panel"><h2>Features and traits</h2>
     ${Object.entries(groups).filter(([, list]) => list.length).map(([g, list]) => `
       <h3 class="group-title">${esc(titles[g])}</h3>
-      <ul class="feature-rows">${list.map(x => row(`f:${x.key}`, x.name, x.source, md(x.text))).join("")}</ul>`).join("")}
+      <ul class="feature-rows">${list.map(x => row(`f:${x.key}`, x.name, x.source, featureBody(x), featureChips(x))).join("")}</ul>`).join("")}
     ${featEntries.length ? `<h3 class="group-title">Feats</h3><ul class="feature-rows">${featEntries.map(x =>
       row(`feat:${x.key}`, x.name, `from ${x.source}`, md(strip(x.entry?.text)))).join("")}</ul>` : ""}
   </section>`;
@@ -447,10 +558,13 @@ function onInput(e) {
 
 function onChange(e) {
   const t = e.target;
+  if (t.matches("[data-armor]")) return change(p => { p.armor = t.value; p.ac = null; });
+  if (t.matches("[data-shield]")) return change(p => { p.shield = t.checked; });
+  if (t.matches("[data-ac-method]")) return change(p => { p.acMethod = t.value; p.ac = null; });
   if (!t.dataset.play || t.type !== "number") return;
   const s = computed();
   change(p => {
-    if (t.dataset.play === "ac") p.ac = t.value === "" || Number(t.value) === s.ac ? null : clampInt(t.value, 0, 40);
+    if (t.dataset.play === "ac") { const auto = armorView(s, p).ac; p.ac = t.value === "" || Number(t.value) === auto ? null : clampInt(t.value, 0, 40); }
     else if (t.dataset.play === "hp.current") p.hp.current = clampInt(t.value, 0, s.hp ?? 0);
     else setPath(p, t.dataset.play, clampInt(t.value, 0, 1e7));
   });
@@ -474,6 +588,7 @@ function onClick(e) {
     return;
   }
   if (d.levelup !== undefined) { location.hash = "#/levelup"; return; }
+  if (d.refreshContent !== undefined) return refreshContent(s);
   if (d.toggle) { ui.open.has(d.toggle) ? ui.open.delete(d.toggle) : ui.open.add(d.toggle); render(); return; }
   if (d.slot) return change(p => togglePip(p.slotsUsed, d.slot, Number(d.i)));
   if (d.pact !== undefined) return change(p => { p.pactUsed = Number(d.i) < p.pactUsed ? Number(d.i) : Number(d.i) + 1; });
