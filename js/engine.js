@@ -179,6 +179,7 @@ function apply(ctx, g, scope, into, classLevel) {
         dice: g.dice, bonus: g.bonus, key: `${scope.path}/${g.name}`,
       });
       if (g.bonus?.checks) (out.bonuses ??= []).push({ checks: g.bonus.checks, value: evalFormula(g.bonus.value, ctx, scope), source: g.name });
+      if (g.bonus?.initiative != null) out.initiativeBonus = (out.initiativeBonus ?? 0) + (evalFormula(g.bonus.initiative, ctx, scope) ?? 0);
       break;
     }
     case "proficiency":
@@ -223,7 +224,8 @@ function addSpell(ctx, id, g, scope, source) {
   const ability = resolveRef(g.cast_ability, scope) || scope.castAbility || null;
   out.spells.push({
     id, name: entry?.name ?? titleCase(id), level: entry?.level ?? null, source,
-    always_prepared: !!g.always_prepared, free_cast: g.free_cast ?? null,
+    always_prepared: !!g.always_prepared,
+    free_cast: g.free_cast ? { ...g.free_cast, uses: evalFormula(g.free_cast.uses ?? 1, ctx, scope) } : null,
     cast_ability: ability || null, class_spell: !!g.class_spell,
   });
 }
@@ -357,7 +359,12 @@ function applyEach(ctx, each, value, scope, into, source, choiceKey) {
   const { out } = ctx;
   switch (each.type) {
     case "spells": addSpell(ctx, value, each, scope, source); break;
-    case "proficiency": out.proficiencies[each.kind]?.push({ value, source }); break;
+    case "proficiency": {
+      // kind "auto" lets one pick mix skills and tools (the Skilled feat).
+      const kind = each.kind === "auto" ? (value in SKILLS ? "skill" : "tool") : each.kind;
+      out.proficiencies[kind]?.push({ value, source });
+      break;
+    }
     case "expertise": out.expertise.push({ value, source }); break;
     case "feat": applyFeat(ctx, value, Object.fromEntries(Object.entries(each.params ?? {}).map(([k, v]) => [k, resolveRef(v, scope)])), { ...scope, path: choiceKey }, into, source); break;
     case "stat": out.stats[each.stat] = value; break;
@@ -495,7 +502,8 @@ export function summarize(build, pack, res = resolve(build, pack)) {
 
   const hd = cls?.hit_die ?? 8;
   const perLevel = Math.max(1, Math.floor(hd / 2) + 1 + mods.con);
-  const hp = cls ? Math.max(1, hd + mods.con) + perLevel * (level - 1) : null;
+  const hpBonus = (res.stats.hp_per_level ?? 0) * level; // Tough, Dwarven Toughness
+  const hp = cls ? Math.max(1, hd + mods.con) + perLevel * (level - 1) + hpBonus : null;
 
   const sc = cls?.spellcasting;
   const spellcasting = sc && sc.progression !== "none" ? {
@@ -523,7 +531,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
 
   return {
     level, scores, mods, pb, skills, saves, hp, hitDie: hd,
-    ac: 10 + mods.dex, initiative: mods.dex,
+    ac: 10 + mods.dex, initiative: mods.dex + (res.initiativeBonus ?? 0),
     speed: res.stats.speed ?? 30, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
     passivePerception: 10 + skills.find(s => s.name === "Perception").bonus,
     proficiencies: res.proficiencies, features: res.features, feats: res.feats, resources, spells, spellcasting, gold,
