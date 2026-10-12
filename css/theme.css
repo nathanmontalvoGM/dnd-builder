@@ -207,3 +207,13 @@ a:active { color: var(--active); }
   .feature-facts dd { font-size: 9.5pt; }
 }
 @media print { .attack-hint { display: none; } }
+
+/* Big number inputs (HP, temp HP, AC): no spinner arrows, and widths in characters so three
+   or four Bookinsanity digits fit. */
+.hp-box input[type="number"], .ac-box input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.hp-box input[type="number"]::-webkit-outer-spin-button, .hp-box input[type="number"]::-webkit-inner-spin-button,
+.ac-box input[type="number"]::-webkit-outer-spin-button, .ac-box input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.hp-current input { width: calc(4ch + 0.5rem); padding: 0 0.25rem; }
+.hp-temp input { width: calc(3ch + 0.8rem); }
+.ac-box input { max-width: calc(3ch + 1.2rem); }
+.hp-adjust input[type="number"] { width: 6.5rem; }
