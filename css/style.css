@@ -559,7 +559,7 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .group-title { font-size: 0.98rem; color: var(--verdigris); margin: 0.9rem 0 0.3rem; }
 .group-title:first-of-type { margin-top: 0.2rem; }
 .facts.one-col { grid-template-columns: 1fr; }
-.side-col textarea, .notes-panel textarea {
+.side-col textarea, .notes-panel textarea, #char-notes {
   width: 100%; font: inherit; font-size: 16px; line-height: 1.5; color: var(--ink); resize: vertical;
   background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.5rem 0.6rem;
 }
@@ -668,6 +668,7 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .is-hidden > :not(.hide-btn), .spell-row.is-hidden .spell-line > :not(.hide-btn) { opacity: 0.4; }
 .is-hidden.stat-box, .is-hidden.hp-box, .is-hidden.ability-block, .is-hidden.panel { border-style: dashed; }
 
+<<<<<<< HEAD
 /* if a whole column is hidden, the others take its space */
 @media (min-width: 1251px) {
   .sheet-grid:not(.has-abil) { grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem); }
@@ -678,3 +679,22 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 @media (max-width: 1250px) and (min-width: 761px) {
   .sheet-grid:not(.has-abil), .sheet-grid:not(.has-main) { grid-template-columns: minmax(0, 1fr); }
 }
+=======
+/* Feature groups: one per class, then species, background, feats */
+.panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; }
+.panel-tools { font-size: 0.85rem; color: var(--muted); }
+.feature-group { border-top: 1px solid var(--rule); }
+.feature-group:first-of-type { border-top: 0; }
+.group-toggle { display: flex; width: 100%; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0 0.35rem; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.group-toggle .group-title { margin: 0; }
+.group-toggle::after { content: "−"; color: var(--muted); margin-left: 0.5rem; }
+.feature-group.closed .group-toggle::after { content: "+"; }
+.group-toggle > .muted { margin-left: auto; font-size: 0.85rem; }
+.group-sub { font-family: var(--sans, inherit); font-weight: 400; font-size: 0.88rem; color: var(--muted); }
+.feature-group .feature-rows { margin-bottom: 0.6rem; }
+
+/* Editing an existing character in the builder */
+.edit-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; border: 1px solid var(--gilt); background: var(--gilt-soft); border-radius: var(--radius); padding: 0.6rem 1rem; margin-bottom: 1rem; }
+.edit-banner p { margin: 0; }
+#char-notes { min-height: 20rem; }
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9

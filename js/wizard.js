@@ -5,6 +5,11 @@ import { esc, md, renderGrants, makeLinker } from "./render.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, STANDARD_ARRAY, POINT_BUY, ALIGNMENTS, mod, signed, ordinal } from "./rules.js";
 
 const DRAFT_KEY = "character-builder:draft";
+<<<<<<< HEAD
+=======
+const LEVELUP_KEY = "character-builder:levelup";
+const EDIT_KEY = "character-builder:edit";
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 
 export const STEPS = [
   { id: "class", title: "Class" },
@@ -29,7 +34,11 @@ export function loadDraft() {
   return null;
 }
 function saveDraft(draft) {
+<<<<<<< HEAD
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+=======
+  try { localStorage.setItem(mode === "levelup" ? LEVELUP_KEY : mode === "edit" ? EDIT_KEY : DRAFT_KEY, JSON.stringify(draft)); } catch {}
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 }
 export function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
@@ -51,6 +60,11 @@ let draft = null;
 let pack = null;
 let root = null;
 let ui = { search: {}, created: null };
+<<<<<<< HEAD
+=======
+let mode = "create"; // "create" | "levelup" | "edit"
+let lu = null;       // level up: { file, base, res0, sum0 }
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 
 export function mountWizard(el, contentPack, { fresh = false } = {}) {
   root = el;
@@ -97,7 +111,7 @@ function render() {
   draft.visited = [...visited];
   const idx = STEPS.findIndex(s => s.id === draft.step);
 
-  root.innerHTML = `
+  root.innerHTML = `${mode === "edit" ? editBanner() : ""}
     <div class="wizard">
       <nav class="steps" aria-label="Character creation steps">
         <ol>${STEPS.map((s, i) => {
@@ -423,7 +437,7 @@ function stepReview(res, s) {
   const uniq = arr => [...new Set(arr)];
   const spellRows = s.spells.slice().sort((a, b) => (a.level ?? 99) - (b.level ?? 99) || a.name.localeCompare(b.name));
 
-  return `${heading("Review", "Check everything over. Creating the character downloads its file; keep that file, it's your save.")}
+  return `${heading("Review", mode === "edit" ? "Check everything over. Saving puts these changes into the open character; save the file from the sheet afterward to keep them." : "Check everything over. Creating the character downloads its file; keep that file, it's your save.")}
     ${blocking.length || nameMissing ? `<div class="warn-box">
       <h2>${blocking.length + (nameMissing ? 1 : 0)} thing${blocking.length + (nameMissing ? 1 : 0) === 1 ? "" : "s"} to look at</h2>
       <ul>${nameMissing ? `<li><button type="button" class="link-btn" data-go="details">Details</button> Your character doesn't have a name yet.</li>` : ""}
@@ -455,7 +469,8 @@ function stepReview(res, s) {
       <ul class="spell-review">${spellRows.map(sp => `<li><span>${esc(sp.name)}</span><span class="muted">${esc([sp.level === 0 ? "cantrip" : sp.level ? `level ${sp.level}` : null, sp.always_prepared ? "always prepared" : null, sp.free_cast ? "free cast" : null, sp.cast_ability && sp.cast_ability !== s.spellcasting?.ability ? `${ABBR[sp.cast_ability]} (DC ${sp.dc})` : null].filter(Boolean).join(", "))}</span></li>`).join("")}</ul>` : ""}
     ${info.length ? `<details class="info-notes"><summary>${info.length} note${info.length === 1 ? "" : "s"} about missing content</summary><ul>${info.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul></details>` : ""}
     <div class="create-row">
-      <button type="button" class="btn btn-primary" data-create ${(blocking.length || nameMissing) && !draft.build.overrides ? "disabled" : ""}>Create character and download file</button>
+      <button type="button" class="btn btn-primary" data-create ${(blocking.length || nameMissing) && !draft.build.overrides ? "disabled" : ""}>${mode === "edit" ? "Save changes to character" : "Create character and download file"}</button>
+      ${mode === "edit" ? `<button type="button" class="btn" data-cancel-edit>Cancel</button>` : ""}
       ${(blocking.length || nameMissing) && !draft.build.overrides ? `<p class="muted">Finish the items above, or tick the DM approval box.</p>` : ""}
     </div>`;
 }
@@ -594,6 +609,11 @@ function onClick(e) {
     const s = d.build.abilities.scores;
     s[t.dataset.pb] = Math.min(15, Math.max(8, (s[t.dataset.pb] ?? 8) + Number(t.dataset.delta)));
   });
+  if (t.hasAttribute("data-cancel-edit")) {
+    if (!confirm("Discard these edits and go back to the sheet?")) return;
+    clearEdit(); location.hash = "#/sheet"; return;
+  }
+  if (t.hasAttribute("data-create") && mode === "edit") return applyEdit();
   if (t.hasAttribute("data-create")) {
     const file = makeCharacterFile();
     const filename = `${slug(file.details.name)}.character.json`;
@@ -616,3 +636,241 @@ function onClick(e) {
     render();
   }
 }
+<<<<<<< HEAD
+=======
+
+// ---------- level up ----------
+// Level Up reuses the wizard's choice screens. It starts from the character's finished build, adds one
+// level, and only shows decisions that are new (or were never finished). Earlier picks stay locked,
+// except choices marked `swap: level_up`.
+const LU_STEPS = [
+  { id: "lu-class", title: "Class" },
+  { id: "lu-choices", title: "Choices" },
+  { id: "lu-review", title: "Review" },
+];
+
+export function mountLevelUp(el, contentPack, file) {
+  root = el;
+  mode = "levelup";
+  pack = mergeContent(contentPack, file.snapshot);
+  const base = normalizeBuild(file.build);
+  const res0 = resolve(base, pack);
+  lu = { file, base, res0, sum0: summarize(base, pack, res0), done0: new Set(allDecisions(res0).filter(d => d.complete).map(d => d.key)) };
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LEVELUP_KEY)); } catch {}
+  // Resume only if it's the same character at the same level.
+  draft = saved?.fileId === file.id && saved?.baseLevel === base.level
+    ? saved
+    : { fileId: file.id, baseLevel: base.level, classId: null, build: structuredClone(base), details: file.details ?? {}, step: "lu-class" };
+  ui = { search: {}, created: null };
+  root.addEventListener("change", onChange);
+  root.addEventListener("input", onInput);
+  root.addEventListener("click", onClick);
+  render();
+}
+
+function clearLevelUp() {
+  try { localStorage.removeItem(LEVELUP_KEY); } catch {}
+}
+
+// Decisions the player can touch in this level up.
+function levelUpDecisions(res) {
+  if (!draft.classId) return [];
+  return allDecisions(res).filter(d => !d.complete || !lu.done0.has(d.key) || d.swap === "level_up");
+}
+function levelUpKeys() {
+  return new Set(levelUpDecisions(resolve(draft.build, pack)).map(d => d.key));
+}
+
+// Warnings this level up introduced (earlier ones were already approved or are the DM's call).
+function newWarnings(res) {
+  const before = new Set(lu.res0.warnings.map(w => w.text));
+  return res.warnings.filter(w => !w.info && !before.has(w.text));
+}
+
+function renderLevelUp() {
+  const focusId = document.activeElement?.dataset?.focus;
+  const res = resolve(draft.build, pack);
+  const sum = summarize(draft.build, pack, res);
+  const idx = LU_STEPS.findIndex(x => x.id === draft.step);
+  const open = levelUpDecisions(res).filter(d => !d.complete).length;
+  const nav = LU_STEPS.map((x, i) => {
+    const n = x.id === "lu-class" ? (draft.classId ? 0 : 1) : x.id === "lu-choices" ? open : 0;
+    const state = x.id === draft.step ? "current" : n ? "open" : i < idx ? "done" : "todo";
+    return `<li><button type="button" data-step="${x.id}" class="step-${state}" ${x.id === draft.step ? 'aria-current="step"' : ""} ${x.id !== "lu-class" && !draft.classId ? "disabled" : ""}>
+      <span class="step-num">${i + 1}</span><span class="step-title">${esc(x.title)}</span>
+      ${state === "open" && x.id === "lu-choices" ? `<span class="step-flag">${n} to finish</span>` : ""}</button></li>`;
+  }).join("");
+  const body = draft.step === "lu-choices" ? luChoices(res) : draft.step === "lu-review" ? luReview(res, sum) : luClass(res);
+  const next = LU_STEPS[idx + 1];
+  root.innerHTML = `
+    <div class="wizard">
+      <nav class="steps" aria-label="Level up steps"><ol>${nav}</ol></nav>
+      <section class="step-body" aria-labelledby="step-heading">
+        ${body}
+        <div class="step-nav">
+          ${idx > 0 ? `<button type="button" class="btn" data-go="${LU_STEPS[idx - 1].id}">Back to ${esc(LU_STEPS[idx - 1].title.toLowerCase())}</button>` : `<button type="button" class="btn" data-cancel-levelup>Cancel</button>`}
+          ${next && draft.classId ? `<button type="button" class="btn btn-primary" data-go="${next.id}">Next: ${esc(next.title.toLowerCase())}</button>` : ""}
+        </div>
+      </section>
+      <aside class="live-summary" aria-label="Character after this level">${renderLiveSummary(sum)}</aside>
+    </div>`;
+  for (const [key, q] of Object.entries(ui.search)) filterList(key, q);
+  if (focusId) root.querySelector(`[data-focus="${CSS.escape(focusId)}"]`)?.focus?.();
+}
+
+function luClass(res) {
+  const base = lu.base;
+  const name = lu.file.details?.name || "Your character";
+  if (base.level >= 20) return `${heading("Level up", `${esc(name)} is level 20, the highest level.`)}`;
+  const scores = finalScores(base, lu.res0);
+  const pick = draft.classId;
+  const card = (id, title, sub, note) => `
+    <label class="pick-card ${pick === id ? "selected" : ""}">
+      <input type="radio" name="lu-class" data-lu-class="1" value="${esc(id)}" ${pick === id ? "checked" : ""}>
+      <span class="pick-name">${esc(title)}</span>
+      <span class="pick-sub">${esc(sub)}</span>
+      ${note ? `<span class="option-warn">${esc(note)}</span>` : ""}
+    </label>`;
+  const current = base.classes.map(c => {
+    const e = pack.classes?.[c.id];
+    return card(c.id, `${e?.name ?? titleCase(c.id)} ${c.level} → ${c.level + 1}`, e?.hit_die ? `d${e.hit_die} hit die` : "", null);
+  }).join("");
+  const others = Object.entries(pack.classes ?? {}).filter(([id]) => !base.classes.some(c => c.id === id))
+    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+    .map(([id, e]) => {
+      const why = multiclassBlockers(base, pack, id, scores);
+      return card(id, `${e.name} 1`, [e.hit_die ? `d${e.hit_die} hit die` : "", "new class"].filter(Boolean).join(", "), why.length ? `Not eligible: ${why.join("; ")}` : null);
+    }).join("");
+  return `${heading("Level up", `${esc(name)} is going from level ${base.level} to ${base.level + 1}. Take the level in a class you have, or start a new one.`)}
+    <h2>Your classes</h2><div class="pick-grid" role="radiogroup" aria-label="Your classes">${current}</div>
+    ${others ? `<h2>Multiclass into a new class</h2>
+      <p class="muted">You need 13 in the primary ability of the new class and of every class you already have. A new class gives only its multiclass proficiencies, and its first level gives the average hit points, not the maximum.</p>
+      <div class="pick-grid" role="radiogroup" aria-label="New classes">${others}</div>` : ""}`;
+}
+
+function luChoices(res) {
+  const all = levelUpDecisions(res);
+  const before = new Set(allDecisions(lu.res0).map(d => d.key));
+  const list = all.filter(d => !before.has(d.key) || d.swap === "level_up");
+  const leftover = all.filter(d => before.has(d.key) && d.swap !== "level_up");
+  const cls = pack.classes?.[draft.classId];
+  const entry = draft.build.classes.find(c => c.id === draft.classId);
+  return `${heading("Choices", `New choices from ${esc(cls?.name ?? "your class")} level ${entry?.level ?? ""}. Earlier choices stay as they are.`)}
+    ${list.length ? renderDecisions(list, { flat: true }) : `<p class="muted">Nothing new to choose at this level.</p>`}
+    ${leftover.length ? `<h2>Unfinished from before</h2>
+      <p class="muted">These were left open when the character was made or last levelled. You can finish them now; they don't block this level up.</p>
+      ${renderDecisions(leftover, { flat: true })}` : ""}`;
+}
+
+function luReview(res, sum) {
+  const s0 = lu.sum0;
+  const keys0 = new Set(s0.features.map(f => f.key));
+  const newFeatures = sum.features.filter(f => !keys0.has(f.key));
+  const res0 = new Map(s0.resources.map(r => [r.id, r]));
+  const resChanges = sum.resources.filter(r => res0.get(r.id)?.max !== r.max);
+  const slots0 = (s0.spellcasting?.slots ?? []).join();
+  const slots1 = sum.spellcasting?.slots ?? [];
+  const blocking = newWarnings(res);
+  const open = levelUpDecisions(res).filter(d => !d.complete);
+  const needsOk = blocking.length > 0;
+  const fmtDice = s => s.hitDice.map(h => `${h.count}d${h.die}`).join(" + ");
+  return `${heading("Review", "Check the changes, then apply them to the open character. Save the file from the sheet afterward.")}
+    ${needsOk ? `<div class="warn-box"><h2>${blocking.length} thing${blocking.length === 1 ? "" : "s"} to look at</h2>
+      <ul>${blocking.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul>
+      <label class="override"><input type="checkbox" data-override ${draft.build.overrides ? "checked" : ""}> My DM has approved this level up anyway</label></div>` : ""}
+    <dl class="facts compact">
+      <div><dt>Level</dt><dd>${s0.level} → ${sum.level}</dd></div>
+      <div><dt>Hit points</dt><dd>${s0.hp} → ${sum.hp} (+${(sum.hp ?? 0) - (s0.hp ?? 0)})</dd></div>
+      <div><dt>Hit dice</dt><dd>${fmtDice(s0)} → ${fmtDice(sum)}</dd></div>
+      ${sum.pb !== s0.pb ? `<div><dt>Proficiency</dt><dd>${signed(s0.pb)} → ${signed(sum.pb)}</dd></div>` : ""}
+      ${slots1.join() !== slots0 ? `<div><dt>Spell slots</dt><dd>${slots1.map((n, i) => `${n} ${ordinal(i + 1)}`).join(", ") || "none"}</dd></div>` : ""}
+    </dl>
+    <h2>New features</h2>
+    ${newFeatures.length ? `<ul class="feature-list">${newFeatures.map(f => `<li><strong>${esc(f.name)}</strong> <span class="muted">${esc(f.source)}</span></li>`).join("")}</ul>` : `<p class="muted">No new features at this level.</p>`}
+    ${resChanges.length ? `<h2>Uses</h2><ul class="feature-list">${resChanges.map(r => `<li><strong>${esc(r.name)}</strong> <span class="muted">${res0.get(r.id)?.max ?? 0} → ${r.max}</span></li>`).join("")}</ul>` : ""}
+    <div class="create-row">
+      <button type="button" class="btn btn-primary" data-apply ${needsOk && !draft.build.overrides ? "disabled" : ""}>Apply level ${sum.level}</button>
+      ${needsOk && !draft.build.overrides ? `<p class="muted">${open.length ? "Finish the choices, or tick the DM approval box." : "Tick the DM approval box to continue."}</p>` : ""}
+    </div>`;
+}
+
+function applyLevelUp() {
+  const res = resolve(draft.build, pack);
+  const sum = summarize(draft.build, pack, res);
+  if (newWarnings(res).length && !draft.build.overrides) return;
+  const snapshot = snapshotFor(res, pack);
+  const f = structuredClone(lu.file);
+  f.format = 2;
+  f.build = normalizeBuild({ ...draft.build, overrides: !!(lu.file.build?.overrides || draft.build.overrides) });
+  f.snapshot = snapshot;
+  if (pack.meta) f.pack = { version: pack.meta.version, built: pack.meta.built };
+  f.updated = new Date().toISOString();
+  // Gaining a level adds its hit points to your current total as well as your maximum.
+  const gain = (sum.hp ?? 0) - (lu.sum0.hp ?? 0);
+  f.play ??= {};
+  f.play.hp ??= { current: lu.sum0.hp ?? 0, temp: 0 };
+  f.play.hp.current = Math.max(0, Math.min(sum.hp ?? 0, f.play.hp.current + gain));
+  clearLevelUp();
+  window.dispatchEvent(new CustomEvent("levelled-up", { detail: f }));
+}
+
+// ---------- editing a finished character ----------
+// The full creation wizard over the character's own build. Every choice can change. Saving writes the
+// new build, details and content snapshot back into the open character; play state (HP, used slots,
+// gear, notes) carries over.
+let editing = null; // { file, sum0 }
+
+export function mountEdit(el, contentPack, file) {
+  root = el;
+  mode = "edit";
+  lu = null;
+  pack = mergeContent(contentPack, file.snapshot);
+  const base = normalizeBuild(file.build);
+  editing = { file, sum0: summarize(base, pack) };
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(EDIT_KEY)); } catch {}
+  // Resume unsaved edits only for the same character and only if it hasn't changed since.
+  draft = saved?.fileId === file.id && saved?.fileUpdated === file.updated
+    ? { ...saved, build: normalizeBuild(saved.build) }
+    : { fileId: file.id, fileUpdated: file.updated, build: structuredClone(base), details: structuredClone(file.details ?? {}), step: "class", visited: STEPS.map(x => x.id) };
+  ui = { search: {}, created: null };
+  root.addEventListener("change", onChange);
+  root.addEventListener("input", onInput);
+  root.addEventListener("click", onClick);
+  render();
+}
+
+function clearEdit() {
+  try { localStorage.removeItem(EDIT_KEY); } catch {}
+}
+
+function editBanner() {
+  const name = editing?.file.details?.name || "your character";
+  return `<div class="edit-banner"><p>Editing <strong>${esc(name)}</strong>. Nothing changes on the sheet until you save on the review step.</p>
+    <button type="button" class="btn btn-quiet" data-cancel-edit>Cancel</button></div>`;
+}
+
+function applyEdit() {
+  const res = resolve(draft.build, pack);
+  const sum = summarize(draft.build, pack, res);
+  const blocking = res.warnings.filter(w => !w.info);
+  if ((blocking.length || !draft.details.name?.trim()) && !draft.build.overrides) return;
+  const f = structuredClone(editing.file);
+  f.format = 2;
+  f.build = normalizeBuild(structuredClone(draft.build));
+  f.details = structuredClone(draft.details);
+  f.snapshot = snapshotFor(res, pack);
+  if (pack.meta) f.pack = { version: pack.meta.version, built: pack.meta.built };
+  f.updated = new Date().toISOString();
+  // Keep damage taken: current HP moves by however much max HP changed.
+  f.play ??= {};
+  f.play.hp ??= { current: editing.sum0.hp ?? 0, temp: 0 };
+  const delta = (sum.hp ?? 0) - (editing.sum0.hp ?? 0);
+  f.play.hp.current = Math.max(0, Math.min(sum.hp ?? 0, f.play.hp.current + delta));
+  f.play.hitDiceSpent = Object.fromEntries(Object.entries(f.play.hitDiceSpent ?? {})
+    .map(([die, n]) => [die, Math.min(n, sum.hitDice.find(h => String(h.die) === die)?.count ?? 0)]).filter(([, n]) => n > 0));
+  clearEdit();
+  window.dispatchEvent(new CustomEvent("character-edited", { detail: f }));
+}
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9

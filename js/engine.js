@@ -6,7 +6,8 @@ import {
   mod, profBonus, spellSlots, pactSlots, maxSpellLevel,
 } from "./rules.js";
 
-export const titleCase = s => String(s ?? "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+// Capitalize each word ("alchemist's supplies" -> "Alchemist's Supplies", not "Alchemist'S").
+export const titleCase = s => String(s ?? "").replace(/[_-]+/g, " ").replace(/(^|[\s(\/])(\w)/g, (_, pre, c) => pre + c.toUpperCase());
 
 export function emptyBuild() {
   return {

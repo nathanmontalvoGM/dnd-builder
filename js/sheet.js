@@ -10,7 +10,11 @@ const COINS = ["cp", "sp", "ep", "gp", "pp"];
 
 let state = null; // { file, dirty }
 let root = null;
+<<<<<<< HEAD
 const ui = { open: new Set(), layout: false }; // expanded rows; layout-editing mode
+=======
+const ui = { open: new Set(), closedGroups: new Set(), printing: false }; // expanded feature/spell rows, collapsed feature groups
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -70,7 +74,11 @@ function ensurePlay() {
   p.equipment ??= startingEquipmentText();
   p.coins ??= { cp: 0, sp: 0, ep: 0, gp: s.gold ?? 0, pp: 0 };
   p.notes ??= "";
+<<<<<<< HEAD
   p.hidden ??= [];   // ids of sheet elements the player hid
+=======
+  p.characterNotes ??= "";
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 }
 
 function startingEquipmentText() {
@@ -147,8 +155,35 @@ function render() {
   const ac = p.ac ?? s.ac;
   const hpMax = s.hp ?? 0;
 
+<<<<<<< HEAD
   const statBoxes = [
     box("stat:ac", "Armor class", "stat-box ac-box", `
+=======
+  root.innerHTML = `
+  <article class="sheet">
+    <header class="sheet-head">
+      <div class="sheet-id">
+        <h1>${esc(f.details?.name || "Unnamed character")}</h1>
+        <p>${esc([`Level ${s.level} ${classText}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn" data-levelup ${s.level >= 20 ? "disabled" : ""}>Level up</button>
+        <button type="button" class="btn" data-edit-build>Edit in builder</button>
+        <button type="button" class="btn" data-print>Export PDF</button>
+        <button type="button" class="btn" data-rest="short">Short rest</button>
+        <button type="button" class="btn" data-rest="long">Long rest</button>
+        <button type="button" class="btn btn-primary" data-save>${state.dirty ? "Save file" : "Saved"}</button>
+        <button type="button" class="btn btn-quiet" data-close>Close</button>
+      </div>
+    </header>
+    ${loadedPack && loadedPack.meta?.version !== f.pack?.version ? `<div class="update-note">
+      <p>Built with content pack ${esc(f.pack?.version ?? "unknown")}. The pack loaded here is ${esc(loadedPack.meta?.version)}.</p>
+      <button type="button" class="btn" data-refresh-content>Update this character's content</button>
+    </div>` : ""}
+
+    <section class="combat-strip" aria-label="Combat">
+      <div class="stat-box ac-box">
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
         <label for="ac-input">Armor class</label>
         <input id="ac-input" type="number" data-play="ac" data-focus="ac" value="${ac}" min="0" max="40">
         <small>${p.ac == null ? "unarmored" : `<button type="button" class="link-btn" data-ac-reset>reset to ${s.ac}</button>`}</small>`),
@@ -200,6 +235,7 @@ function render() {
       </ul>`);
   }).join("");
 
+<<<<<<< HEAD
   const mainCol = [renderAttacks(p), renderResources(s, p), renderFeatures(s, p, f)].join("");
   const sideCol = [
     box("panel:training", "Training", "panel", `<h2>Training</h2>
@@ -223,6 +259,16 @@ function render() {
       <div class="sheet-id">
         <h1>${esc(f.details?.name || "Unnamed character")}</h1>
         <p>${esc([`Level ${s.level} ${cls?.name ?? ""}${sub ? ` (${sub.name})` : ""}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
+=======
+      <div class="main-col">
+        ${renderAttacks(s, p)}
+        ${renderClassStats(s)}
+        <section class="panel"><h2><label for="char-notes">Your notes</label></h2>
+          ${box(`<textarea id="char-notes" rows="14" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>`, p.characterNotes)}
+        </section>
+        ${renderResources(s, p)}
+        ${renderFeatures(s, p, f)}
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
       </div>
       <div class="sheet-actions">
         ${ui.layout ? "" : `<button type="button" class="btn" data-rest="short">Short rest</button>
@@ -237,12 +283,31 @@ function render() {
       ${hiddenCount ? `<button type="button" class="btn" data-show-all>Show everything (${hiddenCount} hidden)</button>` : ""}
     </div>` : ""}
 
+<<<<<<< HEAD
     ${statBoxes ? `<section class="combat-strip" aria-label="Combat">${statBoxes}</section>` : ""}
 
     <div class="${gridCls}">
       ${abilities.trim() ? `<section class="abilities-col" aria-label="Abilities and skills">${abilities}</section>` : ""}
       ${mainCol.trim() ? `<div class="main-col">${mainCol}</div>` : ""}
       ${sideCol.trim() ? `<aside class="side-col">${sideCol}</aside>` : ""}
+=======
+      <aside class="side-col">
+        <section class="panel"><h2>Training</h2>
+          <dl class="facts compact one-col">
+            <div><dt>Armor</dt><dd>${esc(uniq(s.proficiencies.armor).join(", ") || "None")}</dd></div>
+            <div><dt>Weapons</dt><dd>${esc(uniq(s.proficiencies.weapon).join(", ") || "None")}</dd></div>
+            <div><dt>Tools</dt><dd>${esc(uniq(s.proficiencies.tool).join(", ") || "None")}</dd></div>
+            <div><dt>Languages</dt><dd>${esc(uniq(s.proficiencies.language).join(", "))}</dd></div>
+          </dl>
+        </section>
+        ${renderDefenses(s)}
+        <section class="panel"><h2>Equipment</h2>
+          <label class="visually-hidden" for="equip">Equipment</label>
+          ${box(`<textarea id="equip" rows="10" data-play="equipment" data-focus="equipment" placeholder="One item per line">${esc(p.equipment)}</textarea>`, p.equipment)}
+          <div class="coins">${COINS.map(c => `<label><span>${c.toUpperCase()}</span><input type="number" min="0" data-play="coins.${c}" data-focus="coin-${c}" value="${p.coins[c] ?? 0}"></label>`).join("")}</div>
+        </section>
+      </aside>
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
     </div>
 
     ${renderSpells(s, p, f)}
@@ -250,10 +315,18 @@ function render() {
     ${box("panel:notes", "Notes", "panel notes-panel", `
       <h2>Notes</h2>
       <div class="notes-grid">
+<<<<<<< HEAD
         <label class="field"><span>Session notes</span><textarea rows="6" data-play="notes" data-focus="notes">${esc(p.notes)}</textarea></label>
         <label class="field"><span>Appearance and backstory</span><textarea rows="6" data-detail="backstory" data-focus="backstory">${esc(f.details?.backstory ?? "")}</textarea></label>
       </div>`, "section")}
     <p class="sheet-foot muted">${!ui.layout && hiddenCount ? `${hiddenCount} item${hiddenCount === 1 ? " is" : "s are"} hidden. <button type="button" class="link-btn" data-layout>Edit layout</button> to bring ${hiddenCount === 1 ? "it" : "them"} back. ` : ""}Built with content pack ${esc(f.pack?.version ?? "unknown")}. Last saved ${f.updated ? new Date(f.updated).toLocaleString() : "never"}.</p>
+=======
+        <label class="field"><span>Session notes</span>${box(`<textarea rows="6" data-play="notes" data-focus="notes">${esc(p.notes)}</textarea>`, p.notes)}</label>
+        <label class="field"><span>Appearance and backstory</span>${box(`<textarea rows="6" data-detail="backstory" data-focus="backstory">${esc(f.details?.backstory ?? "")}</textarea>`, f.details?.backstory)}</label>
+      </div>
+    </section>
+    <p class="sheet-foot muted">Built with content pack ${esc(f.pack?.version ?? "unknown")}. Last saved ${f.updated ? new Date(f.updated).toLocaleString() : "never"}.</p>
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
   </article>`;
 
   if (focusId) {
@@ -262,6 +335,118 @@ function render() {
   }
 }
 
+<<<<<<< HEAD
+=======
+// ---------- PDF export ----------
+// The browser's print dialog does the PDF ("Save as PDF"). For the printout every feature and spell is
+// expanded, collapsed groups open, and text boxes become plain text so nothing is cut off.
+const box = (html, text) => ui.printing ? `<div class="print-text">${esc(text ?? "") || "&nbsp;"}</div>` : html;
+
+function exportPdf(s) {
+  const f = state.file;
+  const title = document.title;
+  const name = f.details?.name || "Character";
+  document.title = `${name} - Level ${s.level} ${s.classes.map(c => c.name).join(" ")}`.replace(/[\\/:*?"<>|]+/g, "");
+  ui.printing = true;
+  document.documentElement.classList.add("printing");
+  render();
+  const done = () => {
+    ui.printing = false;
+    document.documentElement.classList.remove("printing");
+    document.title = title;
+    render();
+  };
+  window.addEventListener("afterprint", done, { once: true });
+  // Give fonts a moment, then open the dialog.
+  (document.fonts?.ready ?? Promise.resolve()).then(() => window.print());
+}
+
+// ---------- content updates ----------
+// Re-read the class, species, feat and spell entries this character uses from the loaded pack.
+// Choices stay as they are. If max HP changes, current HP moves by the same amount.
+function refreshContent(before) {
+  if (!loadedPack || !confirm("Update this character's rules text and numbers from the loaded content pack? Your choices stay the same. Save the file afterward to keep it.")) return;
+  const f = state.file;
+  const merged = mergeContent(loadedPack, f.snapshot);
+  const res = resolve(f.build, merged);
+  change((p, file) => {
+    file.snapshot = snapshotFor(res, merged);
+    file.pack = { version: loadedPack.meta?.version, built: loadedPack.meta?.built };
+    const after = summarize(file.build, { meta: {}, ...file.snapshot });
+    const delta = (after.hp ?? 0) - (before.hp ?? 0);
+    p.hp.current = Math.max(0, Math.min(after.hp ?? 0, p.hp.current + delta));
+  });
+}
+
+// ---------- armor, AC and conditional speed ----------
+// Which AC calculations apply with the armor and shield toggles, which one is used, and the
+// speed bonuses that switch off in armor (Unarmored Movement) or heavy armor (Fast Movement).
+function armorView(s, p) {
+  const armored = p.armor && p.armor !== "none";
+  const options = armored ? [] : s.acOptions.filter(o => o.armor === "none" && (!p.shield || o.shield));
+  const best = options.slice().sort((a, b) => b.value - a.value)[0];
+  const chosen = options.find(o => o.name === p.acMethod) ?? best;
+  const ac = chosen ? chosen.value + (p.shield ? 2 : 0) : null;
+  const fails = req => ({
+    no_armor: armored, no_heavy_armor: p.armor === "heavy", no_shield: !!p.shield, unarmored: armored || !!p.shield,
+  })[req] ?? false;
+  const speedLost = (s.conditionalStats ?? []).filter(c => c.stat === "speed" && fails(c.requires)).reduce((n, c) => n + (c.value ?? 0), 0);
+  const lostAc = s.acOptions.filter(o => o.armor === "none" && !options.includes(o) && o.source !== "Core rules").map(o => o.name);
+  const note = armored ? "Your armor sets your AC; type it in the box."
+    : lostAc.length ? `${lostAc.join(", ")} doesn't work with a shield.` : "";
+  const why = armored ? "in armor" : "with a shield";
+  return { why, options, method: chosen?.name ?? null, ac, label: chosen ? `${chosen.name}${p.shield ? " + shield" : ""}` : "", speed: s.speed - speedLost, speedLost, note };
+}
+
+// Advantage marker for a save, skill or initiative. Conditional ones get an asterisk and a tooltip.
+function advBadge(list) {
+  if (!list?.length) return "";
+  const always = list.some(a => !a.note);
+  const tip = list.map(a => `${a.source}${a.note ? `: ${a.note}` : ""}`).join("; ");
+  return ` <span class="adv ${always ? "" : "adv-cond"}" title="Advantage (${esc(tip)})">Adv${always ? "" : "*"}</span>`;
+}
+
+// Numbers a feature carries (save DC, damage, its table column), shown on its row.
+function featureChips(f) {
+  const bits = [...(f.die ? [f.die] : []), ...(f.stats ?? []).map(st => `${st.label} ${st.value}`)];
+  return bits.length ? ` <span class="chips">${bits.map(b => `<span class="chip-sm">${esc(b)}</span>`).join("")}</span>` : "";
+}
+function featureBody(f) {
+  const facts = [...(f.die ? [["Die", f.die]] : []), ...(f.stats ?? []).map(st => [st.label, st.value])];
+  return `${facts.length ? `<dl class="facts compact feature-facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}${f.while ? `<div><dt>Applies</dt><dd>while ${esc(f.while)}</dd></div>` : ""}</dl>` : ""}${md(f.text)}`;
+}
+
+// Every number features carry, in one place: Martial Arts die, save DCs, Rage damage and so on.
+function renderClassStats(s) {
+  const rows = new Map();
+  for (const f of s.features) {
+    for (const st of f.stats ?? []) {
+      const k = `${st.label}|${st.value}`;
+      if (!rows.has(k)) rows.set(k, { label: st.label, value: st.value, from: [] });
+      rows.get(k).from.push(f.name);
+    }
+    if (f.die) { const k = `die|${f.name}`; rows.set(k, { label: `${f.name} die`, value: f.die, from: [f.name] }); }
+  }
+  if (!rows.size) return "";
+  return `<section class="panel"><h2>At a glance</h2><dl class="facts compact glance">${[...rows.values()].map(r =>
+    `<div><dt>${esc(r.label)}</dt><dd>${esc(r.value)}${r.from.length && !(r.from.length === 1 && r.label.startsWith(r.from[0])) ? ` <span class="muted">${esc(r.from.join(", "))}</span>` : ""}</dd></div>`).join("")}</dl></section>`;
+}
+
+// Resistances and the advantages that only apply in some situations.
+function renderDefenses(s) {
+  const res = s.resistances ?? [];
+  const adv = (s.advantages ?? []).filter(a => a.vs || a.while || a.on === "check");
+  if (!res.length && !adv.length) return "";
+  const what = a => a.on === "save" ? `${a.abilities ? a.abilities.map(x => ABBR[x]).join(", ") + " saves" : "Saves"}${a.vs ? ` against ${a.vs}` : ""}`
+    : a.on === "check" ? `${a.abilities ? a.abilities.map(x => ABBR[x]).join(", ") + " checks" : "Checks"}${a.vs ? ` for ${a.vs}` : ""}`
+    : a.on === "initiative" ? "Initiative" : "Attacks";
+  return `<section class="panel"><h2>Defenses</h2><dl class="facts compact one-col">
+    ${res.map(r => `<div><dt>Resistance${r.while ? ` while ${esc(r.while)}` : ""}</dt><dd>${esc(r.damage.join(", "))} <span class="muted">${esc(r.source)}</span></dd></div>`).join("")}
+    ${adv.map(a => `<div><dt>Advantage${a.while ? ` while ${esc(a.while)}` : ""}</dt><dd>${esc(what(a))} <span class="muted">${esc(a.source)}</span></dd></div>`).join("")}
+  </dl></section>`;
+}
+
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 const uniq = arr => [...new Set(arr.map(x => x.value ?? x))];
 
 // ---------- hiding ----------
@@ -291,8 +476,14 @@ function renderAttacks(p) {
         <td><input type="text" data-attack="${i}" data-field="damage" data-focus="atk-${i}-damage" value="${esc(a.damage)}" aria-label="Damage"></td>
         <td><input type="text" data-attack="${i}" data-field="notes" data-focus="atk-${i}-notes" value="${esc(a.notes)}" aria-label="Notes"></td>
         <td><button type="button" class="link-btn" data-remove-attack="${i}" aria-label="Remove ${esc(a.name || "attack")}">Remove</button></td>
+<<<<<<< HEAD
       </tr>`).join("")}</tbody></table>` : `<p class="muted">Add your weapons here. Attack bonus is your Strength or Dexterity modifier plus your proficiency bonus if you're trained with it.</p>`}
     <button type="button" class="btn" data-add-attack>Add an attack</button>`, "section");
+=======
+      </tr>`).join("")}</tbody></table>` : `<p class="muted attack-hint">Add your weapons here. Attack bonus is your Strength or Dexterity modifier plus your proficiency bonus if you're trained with it.</p>`}
+    <button type="button" class="btn" data-add-attack>Add an attack</button>
+  </section>`;
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 }
 
 function renderResources(s, p) {
@@ -319,12 +510,20 @@ function renderFeatures(s, p, f) {
   for (const feat of s.features) groups[featureGroup(feat)].push(feat);
   const titles = { class: "Class features", species: `${f.snapshot.species?.[f.build.species]?.name ?? "Species"} traits`, background: "Background", feats: "Feat features" };
   const featEntries = s.feats.map(x => ({ ...x, entry: f.snapshot.feats?.[x.id] }));
+<<<<<<< HEAD
   const row = (id, name, sourceText, body) => {
     if (!visible(`row:${id}`)) return "";
     const open = ui.open.has(id);
     return `<li class="feature-row hideable ${open ? "open" : ""}${isHidden(`row:${id}`) ? " is-hidden" : ""}">
       ${hideBtn(`row:${id}`, name)}
       <button type="button" class="feature-toggle" data-toggle="${esc(id)}" aria-expanded="${open}"><span>${esc(name)}</span><span class="muted">${esc(sourceText)}</span></button>
+=======
+  const featFeatureNames = new Set(featEntries.map(x => x.name));
+  const row = (id, name, sourceText, body, chips = "") => {
+    const open = ui.printing || ui.open.has(id);
+    return `<li class="feature-row ${open ? "open" : ""}">
+      <button type="button" class="feature-toggle" data-toggle="${esc(id)}" aria-expanded="${open}"><span>${esc(name)}${chips}</span><span class="muted">${esc(sourceText)}</span></button>
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
       ${open ? `<div class="feature-body">${body || `<p class="muted">No description in the content snapshot.</p>`}</div>` : ""}
     </li>`;
   };
@@ -333,12 +532,42 @@ function renderFeatures(s, p, f) {
     if (!rowsHtml.trim()) return "";
     return box(`group:${gid}`, title, "feature-group", `<h3 class="group-title">${esc(title)}</h3><ul class="feature-rows">${rowsHtml}</ul>`);
   };
+<<<<<<< HEAD
   const body = [
     ...Object.entries(groups).filter(([, list]) => list.length).map(([g, list]) =>
       group(`features:${g}`, titles[g], list.map(x => row(`f:${x.key}`, x.name, x.source, md(x.text))).join(""))),
     featEntries.length ? group("feats", "Feats", featEntries.map(x => row(`feat:${x.key}`, x.name, `from ${x.source}`, md(strip(x.entry?.text)))).join("")) : "",
   ].join("");
   return box("panel:features", "Features and traits", "panel", `<h2>Features and traits</h2>${body || `<p class="muted">Everything here is hidden.</p>`}`, "section");
+=======
+  const section = (key, title, sub, count, body) => {
+    const closed = !ui.printing && ui.closedGroups.has(key);
+    return `<div class="feature-group ${closed ? "closed" : ""}">
+      <button type="button" class="group-toggle" data-group="${esc(key)}" aria-expanded="${!closed}">
+        <span class="group-title">${esc(title)}${sub ? ` <span class="group-sub">${esc(sub)}</span>` : ""}</span>
+        <span class="muted">${count}</span></button>
+      ${closed ? "" : body}
+    </div>`;
+  };
+  const out = [];
+  for (const [key, g] of groups) {
+    if (key === "feats") {
+      const extra = g.items.filter(x => !featFeatureNames.has(x.name)); // a feat's own feature repeats the feat
+      const n = featEntries.length + extra.length;
+      if (!n) continue;
+      out.push(section(key, g.title, null, n, `<ul class="feature-rows">${featEntries.map(x =>
+        row(`feat:${x.key}`, x.name, `from ${x.source}`, `${(() => { const ff = g.items.find(i => i.name === x.name); return ff ? featureBody({ ...ff, text: "" }) : ""; })()}${md(strip(x.entry?.text))}`, featureChips(g.items.find(i => i.name === x.name) ?? {}))).join("")}
+        ${extra.map(x => row(`f:${x.key}`, x.name, x.source, featureBody(x), featureChips(x))).join("")}</ul>`));
+      continue;
+    }
+    if (!g.items.length) continue;
+    out.push(section(key, g.title, g.sub, g.items.length, `<ul class="feature-rows">${g.items.map(x => row(`f:${x.key}`, x.name, where(x, key), featureBody(x), featureChips(x))).join("")}</ul>`));
+  }
+  return `<section class="panel features-panel"><div class="panel-head"><h2>Features and traits</h2>
+      <span class="panel-tools"><button type="button" class="link-btn" data-groups="open">Expand all</button> · <button type="button" class="link-btn" data-groups="close">Collapse all</button></span></div>
+    ${out.join("")}
+  </section>`;
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 }
 
 function renderSpells(s, p, f) {
@@ -366,8 +595,12 @@ function renderSpells(s, p, f) {
   const spellRow = sp => {
     const e = f.snapshot.spells?.[sp.id];
     const id = `s:${sp.id}|${sp.sources[0]}`;
+<<<<<<< HEAD
     if (!visible(`row:${id}`)) return "";
     const open = ui.open.has(id);
+=======
+    const open = ui.printing || ui.open.has(id);
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
     const tags = [];
     if (sp.always_prepared) tags.push("always prepared");
     if (e?.concentration) tags.push("concentration");
@@ -479,6 +712,19 @@ function onClick(e) {
     location.hash = "#/";
     return;
   }
+<<<<<<< HEAD
+=======
+  if (d.levelup !== undefined) { location.hash = "#/levelup"; return; }
+  if (d.editBuild !== undefined) { location.hash = "#/edit"; return; }
+  if (d.print !== undefined) return exportPdf(s);
+  if (d.refreshContent !== undefined) return refreshContent(s);
+  if (d.group) { ui.closedGroups.has(d.group) ? ui.closedGroups.delete(d.group) : ui.closedGroups.add(d.group); render(); return; }
+  if (d.groups) {
+    const keys = [...root.querySelectorAll("[data-group]")].map(b => b.dataset.group);
+    if (d.groups === "close") keys.forEach(k => ui.closedGroups.add(k)); else ui.closedGroups.clear();
+    render(); return;
+  }
+>>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
   if (d.toggle) { ui.open.has(d.toggle) ? ui.open.delete(d.toggle) : ui.open.add(d.toggle); render(); return; }
   if (d.layout !== undefined) { ui.layout = !ui.layout; render(); if (!ui.layout) window.scrollTo({ top: 0 }); return; }
   if (d.hide) return change(p => {

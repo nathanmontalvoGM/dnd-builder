@@ -5,7 +5,9 @@ A D&D 2024 character builder that runs entirely in the browser. It has no conten
 ## Structure
 
 - `index.html` — page shell
-- `css/style.css` — all styling (light and dark)
+- `css/style.css` — layout and base styling (light and dark)
+- `css/theme.css` — the D&D look (fonts, colors, headings, boxed notes) and the print / PDF layout
+- `assets/fonts/` — Homebrewery remakes of the D&D book fonts (credits in `assets/fonts/LICENSE.md`)
 - `js/app.js` — loading packs, routing, home page, the compendium browser
 - `js/wizard.js` — the character creation wizard and character file export
 - `js/sheet.js` — the character sheet: opens .character.json files, tracks play state, saves the file

@@ -1,0 +1,219 @@
+/* D&D theme. Adapted from the "D&D 5e" Zen Garden stylesheet: Bookinsanity body text, Mr Eaves
+   red small-caps headings with gold rules, Nodesto outlined titles, grey boxed notes, notched sidebar.
+   Loaded after style.css; it only overrides tokens and type, so the layout stays in style.css.
+   Fonts: Homebrewery's remakes (see assets/fonts/LICENSE.md). */
+
+@font-face { font-family: "Bookinsanity"; src: url("../assets/fonts/Bookinsanity.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Bookinsanity"; src: url("../assets/fonts/Bookinsanity-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Bookinsanity"; src: url("../assets/fonts/Bookinsanity-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Bookinsanity"; src: url("../assets/fonts/Bookinsanity-Bold-Italic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "ScalySans"; src: url("../assets/fonts/Scaly-Sans.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "ScalySans"; src: url("../assets/fonts/Scaly-Sans-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "ScalySans"; src: url("../assets/fonts/Scaly-Sans-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "ScalySans"; src: url("../assets/fonts/Scaly-Sans-Bold-Italic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "MrEavesSmallCaps"; src: url("../assets/fonts/Mr-Eaves-Small-Caps.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "Nodesto"; src: url("../assets/fonts/Nodesto-Caps-Condensed.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Nodesto"; src: url("../assets/fonts/Nodesto-Caps-Condensed-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+
+/* ---------- tokens ---------- */
+:root {
+  --paper: #eee5ce;        /* parchment */
+  --surface: #fbf6e9;
+  --ink: #111111;
+  --muted: #5b5245;
+  --rule: #d6c7a1;
+  --verdigris: #a1452e;    /* links and structure (the stylesheet's link color) */
+  --verdigris-soft: #f3ddd3;
+  --heading: #8b281c;      /* h2/h3 red */
+  --gold: #d3b63b;         /* rules under headings */
+  --gilt: #8a6b12;         /* player decisions, homebrew (darker gold so text stays readable) */
+  --gilt-soft: #f2e5b9;
+  --note: #dcdee0;         /* boxed notes and the sidebar */
+  --danger: #9b2c2c;
+  --visited: #522317;
+  --active: #d27963;
+  --title-outline: #000;
+
+  --serif: "Bookinsanity", Georgia, "Times New Roman", serif;
+  --sans: "ScalySans", "Segoe UI", system-ui, sans-serif;
+  --display: "MrEavesSmallCaps", "Palatino Linotype", Georgia, serif;
+  --title: "Nodesto", "Arial Narrow", Impact, sans-serif;
+}
+
+/* Dark: the stylesheet's black page, parchment turned to warm ink. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d0c0a; --surface: #1b1814; --ink: #ece3cf; --muted: #a99e88; --rule: #3e372b;
+    --verdigris: #e08a6f; --verdigris-soft: #3a211a; --heading: #e27a64; --gold: #d3b63b;
+    --gilt: #d9b062; --gilt-soft: #3a2f17; --note: #26282a; --danger: #e08585;
+    --visited: #c9a08f; --active: #f0a58f;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d0c0a; --surface: #1b1814; --ink: #ece3cf; --muted: #a99e88; --rule: #3e372b;
+  --verdigris: #e08a6f; --verdigris-soft: #3a211a; --heading: #e27a64; --gold: #d3b63b;
+  --gilt: #d9b062; --gilt-soft: #3a2f17; --note: #26282a; --danger: #e08585;
+  --visited: #c9a08f; --active: #f0a58f;
+}
+
+/* ---------- type ---------- */
+body { font-family: var(--sans); font-feature-settings: "kern" 1; }
+
+/* Rules text reads in Bookinsanity, like the book. */
+p, .feature-body, .entry-body, .option-text, .entry li, .feature-body li { font-family: var(--serif); font-size: 16px; line-height: 1.6; }
+
+/* Titles: Nodesto, white with a black outline. */
+.sheet-id h1, .home h1, .empty h1, .entry-head h1, .step-body > h1 {
+  font-family: var(--title); font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.025em; line-height: 1.1;
+  text-shadow: -2px -2px 0 var(--title-outline), 2px 2px 0 var(--title-outline), -2px 2px 0 var(--title-outline), 2px -2px 0 var(--title-outline),
+    -2px 0 0 var(--title-outline), 2px 0 0 var(--title-outline), 0 -2px 0 var(--title-outline), 0 2px 0 var(--title-outline);
+}
+.sheet-id h1 { font-size: clamp(2.4rem, 5vw, 3.6rem); }
+.home h1, .empty h1 { font-size: clamp(2.4rem, 5vw, 3.4rem); }
+.entry-head h1, .step-body > h1 { font-size: clamp(2.1rem, 4vw, 3rem); }
+/* The red diamond divider under the main page titles. */
+.home h1::after, .empty h1::after {
+  content: ""; display: block; height: 22px; width: min(35%, 14rem); margin: 0.4rem 0 0;
+  background: #ef3f3f; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+/* h2/h3: Mr Eaves small caps in red; h3 and panel headings get the gold rule. */
+h2, h3, .group-title, .panel h2 { font-family: var(--display); font-weight: 400; color: var(--heading); letter-spacing: 0.01em; }
+h2 { font-size: 1.65rem; }
+h3 { font-size: 1.3rem; }
+.panel > h2, .panel > .panel-head > h2, .entry h2, .step-body h2 { border-bottom: 2px solid var(--gold); padding-bottom: 0.1rem; margin-bottom: 0.5rem; }
+.panel-head { border-bottom: 2px solid var(--gold); margin-bottom: 0.5rem; }
+.panel-head > h2 { border-bottom: 0; margin-bottom: 0; }
+.group-title { font-size: 1.2rem; }
+.brand { font-family: var(--title); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; font-size: 1.5rem; color: var(--heading); }
+.pick-name, .option-name, .choice-head strong, .home-card strong, .decision-head h3 { font-family: var(--display); font-weight: 400; font-size: 1.25rem; color: var(--heading); }
+
+/* Numbers stay in Bookinsanity bold. */
+.stat-box strong, .ability-mod, .hp-current input, .hp-max, .ac-box input, .score-final, .scores strong { font-family: var(--serif); }
+
+/* ---------- links ---------- */
+a { color: var(--verdigris); text-decoration: none; transition: color 0.25s; }
+a:visited { color: var(--visited); }
+a:hover { text-decoration: underline; }
+a:active { color: var(--active); }
+.topnav a, .topnav a:visited { color: var(--ink); }
+.link-btn { color: var(--verdigris); }
+
+/* ---------- boxed notes (the stylesheet's "h3 + p" box) ---------- */
+.step-intro, .update-note, .edit-banner, .info-notes {
+  font-family: var(--sans); font-size: 15px; line-height: 1.7; color: var(--ink);
+  background: var(--note); border: 0; border-left: 2px solid var(--heading); border-right: 2px solid var(--heading);
+  border-radius: 0; padding: 10px 14px; position: relative;
+}
+.step-intro::before, .step-intro::after, .update-note::before, .update-note::after, .edit-banner::before, .edit-banner::after {
+  content: ""; position: absolute; left: -4px; right: -4px; height: 6px;
+  border-left: 6px dotted var(--heading); border-right: 6px dotted var(--heading); pointer-events: none;
+}
+.step-intro::before, .update-note::before, .edit-banner::before { top: -3px; }
+.step-intro::after, .update-note::after, .edit-banner::after { bottom: -3px; }
+.step-intro p, .update-note p, .edit-banner p { font-family: var(--sans); font-size: 15px; }
+
+/* ---------- the sidebar (notched black bars above and below a grey box) ---------- */
+.live-summary { background: var(--note); border: 0; border-radius: 0; position: relative; margin-top: 10px; margin-bottom: 10px; }
+.live-summary::before, .live-summary::after { content: ""; position: absolute; left: 0; right: 0; height: 10px; background: var(--ink); }
+.live-summary::before { top: -10px; clip-path: polygon(0 10px, 100% 10px, calc(100% - 20px) 0, calc(100% - 20px) 8px, 20px 8px, 20px 0); }
+.live-summary::after { bottom: -10px; clip-path: polygon(20px 10px, 20px 2px, calc(100% - 20px) 2px, calc(100% - 20px) 10px, 100% 0, 0 0); }
+.live-summary h2 { font-family: var(--sans); font-weight: 700; font-variant: small-caps; color: var(--ink); border: 0; font-size: 1.3rem; }
+
+/* ---------- controls ---------- */
+.btn { font-family: var(--sans); }
+.btn-primary { background: var(--heading); border-color: var(--heading); color: #fff; }
+.chip-sm { font-family: var(--sans); }
+.pill, .tag { font-family: var(--sans); }
+
+/* ---------- footer ---------- */
+.site-foot { max-width: 60rem; margin: 3rem auto 2rem; padding: 0 1rem; text-align: center; font-family: var(--sans); font-size: 13px; line-height: 1.6; color: var(--muted); }
+.site-foot p { font-family: var(--sans); font-size: 13px; }
+.site-foot a { padding: 0.3rem 0.6rem; border-top: 2px solid var(--gold); border-bottom: 2px solid var(--gold); }
+
+/* ---------- PDF export (print) ----------
+   White page in the light palette, even in dark mode. Controls are hidden; the sheet keeps its
+   three-column layout, and panels avoid splitting across pages. */
+.print-text { white-space: pre-wrap; font-family: var(--serif); font-size: 15px; line-height: 1.5; min-height: 1.5em; }
+
+@media print {
+  @page { size: letter; margin: 10mm; }
+  :root:not(#print-light) {
+    --paper: #fff; --surface: #fff; --ink: #111; --muted: #4f473b; --rule: #cbbd99;
+    --verdigris: #a1452e; --verdigris-soft: #f3ddd3; --heading: #8b281c; --gold: #d3b63b;
+    --gilt: #8a6b12; --gilt-soft: #f2e5b9; --note: #ecedee; --danger: #9b2c2c;
+    color-scheme: light;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { background: #fff !important; font-size: 10.5pt; }
+
+  .topbar, .site-foot, .sheet-actions, .update-note, .hp-adjust, .hp-bar, .toast, .drop-overlay,
+  .panel-tools, .step-btn, [data-add-attack], [data-remove-attack], [data-ac-reset],
+  .feature-toggle::after, .group-toggle::after { display: none !important; }
+
+  main, #app, .sheet { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  .sheet-head { margin-bottom: 0.4rem; }
+  .sheet-id h1 { font-size: 30pt; }
+
+  .combat-strip { gap: 0.35rem; margin-bottom: 0.6rem; }
+  .stat-box, .hp-box { padding: 0.3rem 0.45rem; }
+  .sheet-grid { gap: 0.6rem; }
+  .panel { padding: 0.55rem 0.7rem; margin-bottom: 0.6rem; box-shadow: none; }
+
+  /* Inputs print as their values, without boxes. */
+  input, select, textarea { border: 0 !important; background: transparent !important; box-shadow: none !important; appearance: none; -webkit-appearance: none; color: var(--ink) !important; }
+  input[type="number"] { -moz-appearance: textfield; }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type="checkbox"] { appearance: auto; -webkit-appearance: checkbox; }
+  .pip { border-color: var(--ink); }
+
+  .stat-box, .hp-box, .ability-block, .feature-row, .spell-rows > li, .resource-list > li, .glance > div, .attack-table tr { break-inside: avoid; }
+  .panel > h2, .panel-head, .group-toggle, .group-title { break-after: avoid; }
+  .feature-body { padding-top: 0.2rem; }
+  .feature-toggle { padding: 0.25rem 0; }
+  a { color: var(--ink) !important; text-decoration: none !important; }
+}
+
+/* Print layout: one flow instead of three side-by-side columns (a letter page is too narrow for
+   them), abilities in a row of six, long feature and spell lists in two columns. */
+@media print {
+  .sheet-grid { display: block !important; }
+  .abilities-col { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 0.4rem !important; margin-bottom: 0.6rem; }
+  .ability-block { padding: 0.35rem 0.5rem; }
+  .main-col, .side-col { display: block !important; }
+  .side-col { columns: 3; column-gap: 0.6rem; }
+  .side-col > .panel { break-inside: avoid; display: block; width: 100%; }
+  .combat-strip { grid-template-columns: repeat(6, 1fr) !important; grid-template-areas: "hp hp hp hp hp hp" !important; }
+  .hp-box { grid-column: 1 / -1; }
+  .glance { grid-template-columns: repeat(3, 1fr) !important; }
+  .features-panel .feature-rows, .spell-rows { columns: 2; column-gap: 1.2rem; }
+  .feature-row, .spell-rows > li { break-inside: avoid; display: block; }
+  .feature-group { break-inside: auto; }
+  #char-notes, .print-text { min-height: 0; }
+  .armor-box select { padding: 0; }
+}
+
+/* Print, continued: the features panel flows as one two-column block (per-group columns left gaps
+   at page breaks), with smaller rules text. Feature numbers print in the row body, so the chips go. */
+@media print {
+  .features-panel { columns: 2; column-gap: 1.2rem; }
+  .features-panel > .panel-head { column-span: all; }
+  .features-panel .feature-rows { columns: auto; column-count: auto; }
+  .feature-group { border-top: 0; }
+  .group-toggle { padding: 0.3rem 0 0.1rem; border-bottom: 1px solid var(--gold); margin-bottom: 0.2rem; }
+  .feature-toggle .chips { display: none; }
+  .feature-body p, .feature-body li, .spell-rows .feature-body p { font-size: 9pt; line-height: 1.4; margin-bottom: 0.35em; }
+  .feature-facts { margin-bottom: 0.3rem; }
+  .feature-facts dd { font-size: 9.5pt; }
+}
+@media print { .attack-hint { display: none; } }
+
+/* Big number inputs (HP, temp HP, AC): no spinner arrows, and widths in characters so three
+   or four Bookinsanity digits fit. */
+.hp-box input[type="number"], .ac-box input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.hp-box input[type="number"]::-webkit-outer-spin-button, .hp-box input[type="number"]::-webkit-inner-spin-button,
+.ac-box input[type="number"]::-webkit-outer-spin-button, .ac-box input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.hp-current input { width: calc(4ch + 0.5rem); padding: 0 0.25rem; }
+.hp-temp input { width: calc(3ch + 0.8rem); }
+.ac-box input { max-width: calc(3ch + 1.2rem); }
+.hp-adjust input[type="number"] { width: 6.5rem; }
