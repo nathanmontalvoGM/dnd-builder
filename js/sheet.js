@@ -271,7 +271,7 @@ function render() {
         ${renderAttacks(s, p)}
         ${renderClassStats(s)}
         <section class="panel"><h2><label for="char-notes">Your notes</label></h2>
-          <textarea id="char-notes" rows="5" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>
+          <textarea id="char-notes" rows="14" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>
         </section>
         ${renderResources(s, p)}
         ${renderFeatures(s, p, f)}
