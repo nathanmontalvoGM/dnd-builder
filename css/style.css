@@ -629,3 +629,8 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .spell-line .free-cast { margin-left: 0.25rem; }
 .feature-toggle::after { order: 4; }
 .death .pips { flex-wrap: nowrap; gap: 0.2rem; }
+
+/* Hit dice with more than one die size (multiclass): one compact row per size */
+.tracker-box .stepper.hd-row { gap: 0.15rem; }
+.tracker-box .stepper.hd-row strong { font-size: 1.1rem; min-width: 1rem; }
+.tracker-box .stepper.hd-row .step-btn { width: 1.5rem; height: 1.5rem; }

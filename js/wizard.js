@@ -1,6 +1,6 @@
 // The character creation wizard. All state lives in `draft`; every change re-runs the
 // engine and re-renders, so what's on screen is always what the rules say.
-import { resolve, summarize, emptyBuild, allDecisions, baseScores, asiIncrements, titleCase } from "./engine.js";
+import { resolve, summarize, emptyBuild, normalizeBuild, setStartingClass, setTotalLevel, setSubclass, allDecisions, baseScores, asiIncrements, titleCase } from "./engine.js";
 import { esc, md, renderGrants, makeLinker } from "./render.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, STANDARD_ARRAY, POINT_BUY, ALIGNMENTS, mod, signed, ordinal } from "./rules.js";
 
@@ -23,7 +23,7 @@ export function loadDraft() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d?.build) return { details: {}, step: "class", ...d, build: { ...emptyBuild(), ...d.build } };
+      if (d?.build) return { details: {}, step: "class", ...d, build: normalizeBuild(d.build) };
     }
   } catch {}
   return null;
@@ -36,14 +36,22 @@ export function clearDraft() {
 }
 export function hasDraft() {
   const d = loadDraft();
-  return !!(d && (d.build.class || d.build.background || d.build.species));
+  return !!(d && (d.build.classes.length || d.build.background || d.build.species));
 }
 export function draftLabel(pack) {
   const d = loadDraft();
   if (!d) return "";
-  const cls = pack.classes?.[d.build.class]?.name;
+  const cls = classLine(d.build, pack);
   const name = d.details?.name?.trim();
   return [name, cls ? `level ${d.build.level} ${cls}` : null].filter(Boolean).join(", ");
+}
+
+// "Monk" for one class, "Monk 3 / Barbarian 2" for several.
+function classLine(build, p = pack) {
+  const list = build.classes;
+  const name = c => p?.classes?.[c.id]?.name ?? titleCase(c.id);
+  if (!list.length) return "";
+  return list.length === 1 ? name(list[0]) : list.map(c => `${name(c)} ${c.level}`).join(" / ");
 }
 
 // ---------- module state ----------
@@ -129,9 +137,9 @@ function render() {
 
 function renderLiveSummary(s) {
   const b = draft.build;
-  const cls = pack.classes?.[b.class];
   const name = draft.details.name?.trim();
-  const line = [pack.species?.[b.species]?.name, cls ? `${cls.name} ${b.level}` : null].filter(Boolean).join(" ");
+  const cl = classLine(b);
+  const line = [pack.species?.[b.species]?.name, cl ? (b.classes.length > 1 ? cl : `${cl} ${b.level}`) : null].filter(Boolean).join(" ");
   return `
     <h2>${esc(name || "New character")}</h2>
     <p class="muted">${esc(line || "Nothing picked yet")}</p>
@@ -177,7 +185,8 @@ function entryCards(bucket, field, current, describe) {
 
 function stepClass(res) {
   const b = draft.build;
-  const cls = pack.classes?.[b.class];
+  const start = b.classes[0];
+  const cls = pack.classes?.[start?.id];
   return `${heading("Class", "Your class decides your role in a fight, your hit points and most of your abilities.")}
     <div class="field-row">
       <label class="field"><span>Starting level</span>
@@ -185,7 +194,8 @@ function stepClass(res) {
       </label>
       <p class="muted field-note">Most campaigns start at level 1. Ask your DM if yours starts higher.</p>
     </div>
-    ${entryCards("classes", "class", b.class, e => [e.hit_die ? `d${e.hit_die} hit die` : "", (e.primary_ability ?? []).map(a => ABILITIES[a]).join(" or ")].filter(Boolean).join(", "))}
+    ${b.classes.length > 1 ? `<p class="muted">Multiclassed: ${esc(classLine(b))}. The card below is your starting class.</p>` : ""}
+    ${entryCards("classes", "class", start?.id, e => [e.hit_die ? `d${e.hit_die} hit die` : "", (e.primary_ability ?? []).map(a => ABILITIES[a]).join(" or ")].filter(Boolean).join(", "))}
     ${cls ? `<h2>${esc(cls.name)} choices</h2>${renderDecisions(res.decisions.class)}` : ""}`;
 }
 
@@ -305,7 +315,7 @@ function stepAbilities(res, sum) {
   const b = draft.build;
   const method = b.abilities.method;
   const base = baseScores(b);
-  const cls = pack.classes?.[b.class];
+  const cls = pack.classes?.[b.classes[0]?.id];
   const bgAsi = res.decisions.abilities.find(d => d.kind === "asi" && d.asi.mode === "background");
   const otherInc = Object.fromEntries(ABILITY_KEYS.map(a => [a, 0]));
   for (const d of res.asi) {
@@ -372,11 +382,11 @@ function stepAbilities(res, sum) {
 
 // ---------- spells ----------
 function stepSpells(res) {
-  const cls = pack.classes?.[draft.build.class];
-  const sc = cls?.spellcasting;
-  const intro = !cls ? "Choose a class first."
-    : !sc || sc.progression === "none" ? `${esc(cls.name)}s don't cast spells from a class list. Spells from your species, background or feats are picked on those steps.`
-    : `${esc(cls.name)}s cast with ${ABILITIES[sc.ability]}. Spells you always have prepared, like domain spells, don't count against these numbers.`;
+  const classes = draft.build.classes.map(c => pack.classes?.[c.id]).filter(Boolean);
+  const casters = classes.filter(c => c.spellcasting && c.spellcasting.progression !== "none");
+  const intro = !classes.length ? "Choose a class first."
+    : !casters.length ? `${esc(classes.map(c => c.name).join(" and "))} ${classes.length > 1 ? "don't" : "doesn't"} cast spells from a class list. Spells from your species, background or feats are picked on those steps.`
+    : `${casters.map(c => `${esc(c.name)}s cast with ${ABILITIES[c.spellcasting.ability]}`).join("; ")}. Spells you always have prepared, like domain spells, don't count against these numbers.`;
   return `${heading("Spells", intro)}${renderDecisions(res.decisions.spells)}`;
 }
 
@@ -395,7 +405,8 @@ function stepEquipment(sum) {
       </label>`).join("")}</div>`;
   };
   return `${heading("Equipment", "Pick a starting package from your class and your background. You'll list the actual items in the equipment box on your sheet; the builder only tracks your gold.")}
-    <h2>${esc(pack.classes?.[b.class]?.name ?? "Class")}</h2>${block("class", pack.classes?.[b.class])}
+    <h2>${esc(pack.classes?.[b.classes[0]?.id]?.name ?? "Class")}</h2>${block("class", pack.classes?.[b.classes[0]?.id])}
+    ${b.classes.length > 1 ? `<p class="muted">Only your starting class gives starting equipment.</p>` : ""}
     <h2>${esc(pack.backgrounds?.[b.background]?.name ?? "Background")}</h2>${block("background", pack.backgrounds?.[b.background])}
     <p class="gold-total">Starting gold: <strong>${sum.gold} GP</strong></p>`;
 }
@@ -433,7 +444,7 @@ function stepReview(res, s) {
     <div class="review-grid">
       <section><h2>Abilities</h2><table class="mini-table">${ABILITY_KEYS.map(a => `<tr><th scope="row">${ABILITIES[a]}</th><td>${s.scores[a]}</td><td>${signed(s.mods[a])}</td><td class="muted">save ${signed(s.saves.find(x => x.ability === a).bonus)}${s.saves.find(x => x.ability === a).prof ? " ●" : ""}</td></tr>`).join("")}</table></section>
       <section><h2>Combat</h2><dl class="facts compact">
-        <div><dt>Hit points</dt><dd>${s.hp ?? "—"}</dd></div><div><dt>Hit dice</dt><dd>${s.level}d${s.hitDie}</dd></div>
+        <div><dt>Hit points</dt><dd>${s.hp ?? "—"}</dd></div><div><dt>Hit dice</dt><dd>${s.hitDice.map(h => `${h.count}d${h.die}`).join(" + ")}</dd></div>
         <div><dt>Armor class</dt><dd>${s.ac} unarmored</dd></div><div><dt>Initiative</dt><dd>${signed(s.initiative)}</dd></div>
         <div><dt>Speed</dt><dd>${s.speed} ft</dd></div><div><dt>Passive Perception</dt><dd>${s.passivePerception}</dd></div>
         ${s.darkvision ? `<div><dt>Darkvision</dt><dd>${s.darkvision} ft</dd></div>` : ""}
@@ -453,7 +464,7 @@ function stepReview(res, s) {
       ${s.resources.map(r => `<li><strong>${esc(r.name)}</strong> <span class="muted">${r.max} uses, ${esc(r.source)}</span></li>`).join("")}</ul>
     ${spellRows.length ? `<h2>Spells</h2>${s.spellcasting?.slots?.length ? `<p class="muted">Spell slots: ${s.spellcasting.slots.map((n, i) => `${n} ${ordinal(i + 1)}`).join(", ")}</p>` : ""}
       <ul class="spell-review">${spellRows.map(sp => `<li><span>${esc(sp.name)}</span><span class="muted">${esc([sp.level === 0 ? "cantrip" : sp.level ? `level ${sp.level}` : null, sp.always_prepared ? "always prepared" : null, sp.free_cast ? "free cast" : null, sp.cast_ability && sp.cast_ability !== s.spellcasting?.ability ? `${ABBR[sp.cast_ability]} (DC ${sp.dc})` : null].filter(Boolean).join(", "))}</span></li>`).join("")}</ul>` : ""}
-    ${info.length ? `<details class="info-notes"><summary>${info.length} note${info.length === 1 ? "" : "s"} about missing content</summary><ul>${info.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul></details>` : ""}
+    ${info.length ? `<details class="info-notes"><summary>${info.length} note${info.length === 1 ? "" : "s"}</summary><ul>${info.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul></details>` : ""}
     <div class="create-row">
       <button type="button" class="btn btn-primary" data-create ${(blocking.length || nameMissing) && !draft.build.overrides ? "disabled" : ""}>Create character and download file</button>
       ${(blocking.length || nameMissing) && !draft.build.overrides ? `<p class="muted">Finish the items above, or tick the DM approval box.</p>` : ""}
@@ -481,14 +492,14 @@ function makeCharacterFile() {
   }
   const now = new Date().toISOString();
   return {
-    format: 1,
+    format: 2,
     kind: "character",
     id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     created: now,
     updated: now,
     pack: { version: pack.meta.version, built: pack.meta.built },
     details: { ...draft.details },
-    build: structuredClone(draft.build),
+    build: normalizeBuild(structuredClone(draft.build)),
     play: {},       // filled in by the sheet: current HP, used slots, equipment, notes
     snapshot,       // the content this character was built with, so pack updates don't change it
   };
@@ -509,7 +520,8 @@ const slug = s => (s || "character").toLowerCase().replace(/[^a-z0-9]+/g, "-").r
 // ---------- events ----------
 function setChoice(key, value, checked, choose) {
   update(d => {
-    if (key === `class.${d.build.class}/subclass`) { d.build.subclass = value; return; }
+    const sub = key.match(/^class\.(.+)\/subclass$/);
+    if (sub) { d.build = setSubclass(d.build, sub[1], value); return; }
     const cur = Array.isArray(d.build.choices[key]) ? d.build.choices[key] : [];
     let next;
     if (choose === 1) next = [value];
@@ -522,8 +534,9 @@ function setChoice(key, value, checked, choose) {
 function onChange(e) {
   const t = e.target;
   if (t.dataset.key) return setChoice(t.dataset.key, t.value, t.checked, Number(t.dataset.choose));
-  if (t.dataset.pick) return update(d => { d.build[t.dataset.pick] = t.value; if (t.dataset.pick === "class") d.build.subclass = null; });
-  if (t.dataset.field === "level") return update(d => { d.build.level = Number(t.value); });
+  if (t.dataset.pick === "class") return update(d => { d.build = setStartingClass(d.build, t.value); });
+  if (t.dataset.pick) return update(d => { d.build[t.dataset.pick] = t.value; });
+  if (t.dataset.field === "level") return update(d => { d.build = setTotalLevel(d.build, Number(t.value)); });
   if (t.hasAttribute("data-method")) return update(d => {
     d.build.abilities.method = t.value;
     if (t.value === "pointbuy") d.build.abilities.scores = Object.fromEntries(ABILITY_KEYS.map(a => [a, Math.min(15, Math.max(8, d.build.abilities.scores[a] ?? 8))]));

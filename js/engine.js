@@ -3,16 +3,15 @@
 // It never mutates the build; the UI re-runs resolve() after every change.
 import {
   ABILITY_KEYS, ABILITIES, SKILLS, STANDARD_ARRAY, POINT_BUY, STANDARD_LANGUAGES,
-  mod, profBonus, spellSlots, pactSlots, maxSpellLevel,
+  mod, profBonus, pactSlots, maxSpellLevel, multiclassSlots,
 } from "./rules.js";
 
 export const titleCase = s => String(s ?? "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 
 export function emptyBuild() {
   return {
-    level: 1,
-    class: null,
-    subclass: null,
+    level: 1,         // total character level; always the sum of classes[].level once a class is picked
+    classes: [],      // [{ id, level, subclass }]; the first entry is the starting class
     background: null,
     species: null,
     abilities: { method: "standard", scores: {} },
@@ -23,10 +22,72 @@ export function emptyBuild() {
   };
 }
 
+// ---------- classes ----------
+// Builds made before multiclassing stored one `class`/`subclass` plus `level`. This turns either
+// shape into the current one without touching the original object.
+export function normalizeBuild(build) {
+  const b = { ...emptyBuild(), ...build };
+  if (!Array.isArray(build.classes)) {
+    b.classes = build.class ? [{ id: build.class, level: clampLevel(build.level), subclass: build.subclass ?? null }] : [];
+  } else {
+    b.classes = b.classes.filter(c => c?.id).map(c => ({ id: c.id, level: clampLevel(c.level), subclass: c.subclass ?? null }));
+  }
+  delete b.class;
+  delete b.subclass;
+  b.level = b.classes.length ? b.classes.reduce((n, c) => n + c.level, 0) : clampLevel(b.level);
+  return b;
+}
+
+const clampLevel = n => Math.min(20, Math.max(1, Math.floor(Number(n) || 1)));
+
+export const startingClass = build => normalizeBuild(build).classes[0] ?? null;
+
+// Pick the starting class. Its level absorbs whatever the other classes don't use.
+export function setStartingClass(build, id) {
+  const b = normalizeBuild(build);
+  const others = b.classes.slice(1).filter(c => c.id !== id);
+  const used = others.reduce((n, c) => n + c.level, 0);
+  b.classes = [{ id, level: Math.max(1, b.level - used), subclass: b.classes[0]?.id === id ? b.classes[0].subclass : null }, ...others];
+  return normalizeBuild(b);
+}
+
+// Change the total level. The starting class takes up the difference.
+export function setTotalLevel(build, total) {
+  const b = normalizeBuild(build);
+  total = clampLevel(total);
+  if (!b.classes.length) return { ...b, level: total };
+  const used = b.classes.slice(1).reduce((n, c) => n + c.level, 0);
+  b.classes[0].level = Math.max(1, total - used);
+  return normalizeBuild(b);
+}
+
+export function setSubclass(build, classId, subclassId) {
+  const b = normalizeBuild(build);
+  const c = b.classes.find(x => x.id === classId);
+  if (c) c.subclass = subclassId;
+  return b;
+}
+
+// Multiclassing prerequisites: `ability` passes if ANY listed score is high enough,
+// `ability_all` only if EVERY listed score is.
+function multiclassProblem(cls, scores) {
+  const p = cls?.multiclass?.prereq;
+  if (!p) return null;
+  const short = Object.entries(p.ability_all ?? {}).filter(([a, v]) => (scores[a] ?? 0) < v);
+  const any = Object.entries(p.ability ?? {});
+  const anyOk = !any.length || any.some(([a, v]) => (scores[a] ?? 0) >= v);
+  if (!short.length && anyOk) return null;
+  const parts = [];
+  if (short.length) parts.push(short.map(([a, v]) => `${ABILITIES[a]} ${v}`).join(" and "));
+  if (!anyOk) parts.push(any.map(([a, v]) => `${ABILITIES[a]} ${v}`).join(" or "));
+  return parts.join(", plus ");
+}
+
 // ---------- resolve ----------
 // Two passes: the first finds the ability increases, the second evaluates formulas
 // (resource maximums, bonuses) against the final ability scores.
 export function resolve(build, pack) {
+  build = normalizeBuild(build);
   const first = resolvePass(build, pack, null);
   return resolvePass(build, pack, finalScores(build, first));
 }
@@ -36,7 +97,7 @@ function resolvePass(build, pack, scores) {
     decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [] },
     features: [], proficiencies: { skill: [], save: [], armor: [], weapon: [], tool: [], language: [] },
     expertise: [], stats: {}, resources: {}, spells: [], feats: [], warnings: [], missing: new Set(),
-    asi: [], sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
+    asi: [], notes: [], sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
   };
   const level = Math.min(20, Math.max(1, build.level || 1));
   const ctx = { build, pack, out, level, scores: scores ?? Object.fromEntries(ABILITY_KEYS.map(a => [a, baseScores(build)[a] ?? 10])) };
@@ -62,8 +123,11 @@ function resolvePass(build, pack, scores) {
     walk(ctx, bg.grants, scope, out.decisions.background);
   }
 
-  const cls = build.class && pack.classes?.[build.class];
-  if (cls) walkClass(ctx, cls, level);
+  // Classes in the order taken. Only the first (starting) class gives its full proficiencies.
+  build.classes.forEach((entry, i) => {
+    const cls = pack.classes?.[entry.id];
+    if (cls) walkClass(ctx, cls, entry, i === 0);
+  });
 
   // Core rule: Common plus two standard languages.
   out.proficiencies.language.push({ value: "Common", source: "Every character" });
@@ -97,18 +161,28 @@ function resolveRef(v, scope) {
   return undefined;
 }
 
-function walkClass(ctx, cls, level) {
-  const { build, pack, out } = ctx;
-  out.sources.classes.add(build.class);
-  const scope = newScope({ path: `class.${build.class}`, step: "class", label: cls.name, levelWord: "class", classLevel: level });
+function walkClass(ctx, cls, entry, starting) {
+  const { pack, out } = ctx;
+  const id = entry.id, level = entry.level;
+  out.sources.classes.add(id);
+  const scope = newScope({ path: `class.${id}`, step: "class", label: cls.name, levelWord: "class", classLevel: level });
   scope.castAbility = cls.spellcasting?.ability;
-  const p = cls.proficiencies ?? {};
-  for (const s of p.saves ?? []) out.proficiencies.save.push({ value: s, source: cls.name });
-  for (const a of p.armor ?? []) out.proficiencies.armor.push({ value: a, source: cls.name });
-  for (const w of p.weapons ?? []) out.proficiencies.weapon.push({ value: w, source: cls.name });
-  for (const t of p.tools ?? []) out.proficiencies.tool.push({ value: t, source: cls.name });
+  scope.cls = cls;
+  scope.starting = starting;
+  // A starting class gives everything in its proficiencies block. A class added later gives only
+  // its multiclass block: no saving throws, and only the armor, weapons, tools and skills listed there.
+  const p = starting ? (cls.proficiencies ?? {}) : (cls.multiclass?.proficiencies ?? {});
+  const source = starting ? cls.name : `${cls.name} (multiclass)`;
+  if (starting) for (const s of p.saves ?? []) out.proficiencies.save.push({ value: s, source });
+  for (const a of p.armor ?? []) out.proficiencies.armor.push({ value: a, source });
+  for (const w of p.weapons ?? []) out.proficiencies.weapon.push({ value: w, source });
+  for (const t of p.tools ?? []) out.proficiencies.tool.push({ value: t, source });
   if (p.skills) {
-    walk(ctx, [{ type: "choice", id: "skills", label: `${cls.name} skills`, choose: p.skills.choose, from: p.skills.from, each: { type: "proficiency", kind: "skill" } }],
+    walk(ctx, [{ type: "choice", id: starting ? "skills" : "multiclass_skills", label: `${cls.name} skills`, choose: p.skills.choose, from: p.skills.from, each: { type: "proficiency", kind: "skill" } }],
+      scope, out.decisions.class);
+  }
+  if (!starting && p.tool_choice) {
+    walk(ctx, [{ type: "choice", id: "multiclass_tools", label: `${cls.name} tools`, choose: p.tool_choice.choose, from: p.tool_choice.from, each: { type: "proficiency", kind: "tool" } }],
       scope, out.decisions.class);
   }
 
@@ -120,9 +194,9 @@ function walkClass(ctx, cls, level) {
   // Subclass
   const subLevel = cls.subclass_level ?? 3;
   if (level >= subLevel) {
-    const subs = Object.entries(pack.subclasses ?? {}).filter(([, s]) => s.class === build.class);
-    const key = `class.${build.class}/subclass`;
-    const chosen = build.subclass && pack.subclasses?.[build.subclass]?.class === build.class ? build.subclass : null;
+    const subs = Object.entries(pack.subclasses ?? {}).filter(([, s]) => s.class === id);
+    const key = `class.${id}/subclass`;
+    const chosen = entry.subclass && pack.subclasses?.[entry.subclass]?.class === id ? entry.subclass : null;
     out.decisions.class.push(makeDecision({
       key, kind: "subclass", step: "class", source: cls.name, level: subLevel, label: `${cls.name} subclass`, choose: 1,
       value: chosen ? [chosen] : [],
@@ -133,6 +207,8 @@ function walkClass(ctx, cls, level) {
       out.sources.subclasses.add(chosen);
       const subScope = newScope({ path: `subclass.${chosen}`, step: "class", label: sub.name, levelWord: "class", classLevel: level });
       subScope.castAbility = cls.spellcasting?.ability;
+      subScope.cls = cls;
+      subScope.starting = starting;
       const parent = out.decisions.class.at(-1).children;
       for (let l = 1; l <= level; l++) walk(ctx, sub.levels?.[l] ?? [], subScope, parent, l);
     }
@@ -146,9 +222,10 @@ function walkClass(ctx, cls, level) {
     const prepared = t.prepared?.[level - 1] ?? 0;
     const maxLvl = maxSpellLevel(sc.progression, level);
     const castWith = { type: "spells", cast_ability: sc.ability, class_spell: true };
-    if (cantrips) walk(ctx, [{ type: "choice", id: "class_cantrips", label: "Cantrips", choose: cantrips, from: { pool: "spells", lists: sc.list, level: 0, exclude_known: true }, each: castWith }],
+    const named = ctx.build.classes.length > 1 ? `${cls.name} ` : "";
+    if (cantrips) walk(ctx, [{ type: "choice", id: "class_cantrips", label: named ? `${named}cantrips` : "Cantrips", choose: cantrips, from: { pool: "spells", lists: sc.list, level: 0, exclude_known: true }, each: castWith }],
       { ...scope, step: "spells" }, out.decisions.spells);
-    if (prepared && maxLvl) walk(ctx, [{ type: "choice", id: "class_prepared", label: "Prepared spells", choose: prepared, swap: "long_rest",
+    if (prepared && maxLvl) walk(ctx, [{ type: "choice", id: "class_prepared", label: `${named}${named ? "prepared spells" : "Prepared spells"}`, choose: prepared, swap: "long_rest",
       from: { pool: "spells", lists: sc.list, min_level: 1, max_level: maxLvl, exclude_known: true }, each: castWith }],
       { ...scope, step: "spells" }, out.decisions.spells);
   }
@@ -158,7 +235,8 @@ function walkClass(ctx, cls, level) {
 function walk(ctx, grants, scope, into, classLevel = null) {
   for (const g of grants ?? []) {
     if (!g || typeof g !== "object") continue;
-    if (g.at_level && g.at_level > ctx.level) continue;
+    if (g.at_level && g.at_level > (scope.classLevel ?? ctx.level)) continue;
+    if (g.starting_only && scope.starting === false) continue; // core traits a multiclassed class doesn't give
     apply(ctx, g, scope, into, classLevel);
   }
 }
@@ -172,6 +250,11 @@ function apply(ctx, g, scope, into, classLevel) {
   const source = sourceLabel(scope, classLevel);
   switch (g.type) {
     case "feature": {
+      // Features marked unique (Extra Attack, Unarmored Defense) don't stack when two classes give them.
+      if (g.unique && out.features.some(f => f.name === g.name)) {
+        out.notes.push({ text: `${g.name} from ${source} doesn't stack with the one you already have.` });
+        break;
+      }
       const variant = g.by_choice ? asArray(scope.choices.get(g.by_choice))[0] : null;
       out.features.push({
         name: g.name, text: variant && g.variants ? g.variants[variant] : g.text, source,
@@ -274,6 +357,7 @@ function applyFeat(ctx, id, params, scope, into, source) {
   if (!feat) { out.missing.add(`feats:${id}`); return; }
   out.sources.feats.add(id);
   const featScope = newScope({ path: `${scope.path}>feat.${id}`, step: scope.step, label: feat.name, levelWord: "character", params });
+  featScope.cls = scope.cls;
   out.feats.push({ id, name: feat.name, source, params, prereq: feat.prereq, key: featScope.path });
   walk(ctx, feat.grants, featScope, into);
 }
@@ -386,7 +470,8 @@ const prettyValue = v => (v in ABILITIES ? ABILITIES[v] : titleCase(v));
 function evalFormula(f, ctx, scope) {
   if (typeof f === "number") return f;
   if (typeof f !== "string") return null;
-  const cls = ctx.build.class && ctx.pack.classes?.[ctx.build.class];
+  // Formulas read the class they belong to; anything outside a class uses the starting class.
+  const cls = scope.cls ?? ctx.pack.classes?.[ctx.build.classes[0]?.id];
   const scores = ctx.scores;
   const lvl = scope.classLevel ?? ctx.level;
   const vars = {
@@ -434,7 +519,7 @@ export function allDecisions(res) {
 function computeWarnings(ctx) {
   const { build, pack, out } = ctx;
   const w = out.warnings;
-  if (!build.class) w.push({ step: "class", text: "Choose a class." });
+  if (!build.classes.length) w.push({ step: "class", text: "Choose a class." });
   if (!build.background) w.push({ step: "background", text: "Choose a background." });
   if (!build.species) w.push({ step: "species", text: "Choose a species." });
 
@@ -468,7 +553,20 @@ function computeWarnings(ctx) {
     const [kind, id] = m.split(":");
     w.push({ step: "review", text: `${titleCase(kind.replace(/s$/, ""))} "${titleCase(id)}" isn't in this content pack yet, so it won't show details.`, info: true });
   }
-  if (build.class && !pack.classes?.[build.class]) w.push({ step: "class", text: "Your class isn't in this content pack anymore." });
+  for (const c of build.classes) if (!pack.classes?.[c.id]) w.push({ step: "class", text: `${titleCase(c.id)} isn't in this content pack anymore.` });
+
+  // Multiclassing: every class needs its prerequisite, including the starting class.
+  const ids = build.classes.map(c => c.id);
+  if (new Set(ids).size !== ids.length) w.push({ step: "class", text: "The same class is listed twice. Combine those levels into one entry." });
+  if (build.classes.length > 1) {
+    for (const c of build.classes) {
+      const cls = pack.classes?.[c.id];
+      const problem = cls && multiclassProblem(cls, scores);
+      if (problem) w.push({ step: "class", text: `Multiclassing with ${cls.name} needs ${problem}.` });
+    }
+  }
+  if (build.level > 20) w.push({ step: "class", text: `Your class levels add up to ${build.level}, above the maximum of 20.` });
+  for (const n of out.notes) w.push({ step: "review", text: n.text, info: true });
 }
 
 export function finalScores(build, res) {
@@ -483,8 +581,10 @@ export function finalScores(build, res) {
 
 // ---------- the computed character ----------
 export function summarize(build, pack, res = resolve(build, pack)) {
-  const level = build.level || 1;
-  const cls = pack.classes?.[build.class];
+  build = normalizeBuild(build);
+  const level = Math.min(20, build.level || 1);
+  const classes = build.classes.map(c => ({ ...c, entry: pack.classes?.[c.id] })).filter(c => c.entry);
+  const cls = classes[0]?.entry;
   const scores = finalScores(build, res);
   const mods = Object.fromEntries(ABILITY_KEYS.map(a => [a, mod(scores[a])]));
   const pb = profBonus(level);
@@ -500,23 +600,44 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   const saveProf = new Set(res.proficiencies.save.map(s => s.value));
   const saves = ABILITY_KEYS.map(a => ({ ability: a, prof: saveProf.has(a), bonus: mods[a] + (saveProf.has(a) ? pb : 0) }));
 
-  const hd = cls?.hit_die ?? 8;
-  const perLevel = Math.max(1, Math.floor(hd / 2) + 1 + mods.con);
+  // Hit points: the starting class's die in full at level 1, then the fixed average of each
+  // class's own die for every other level (including the first level of an added class).
+  const perLevel = hd => Math.max(1, Math.floor(hd / 2) + 1 + mods.con);
   const hpBonus = (res.stats.hp_per_level ?? 0) * level; // Tough, Dwarven Toughness
-  const hp = cls ? Math.max(1, hd + mods.con) + perLevel * (level - 1) + hpBonus : null;
+  let hp = null;
+  if (cls) {
+    const hd0 = cls.hit_die ?? 8;
+    hp = Math.max(1, hd0 + mods.con) + hpBonus;
+    classes.forEach((c, i) => { hp += perLevel(c.entry.hit_die ?? 8) * (c.level - (i === 0 ? 1 : 0)); });
+  }
+  const hitDice = [];
+  for (const c of classes) {
+    const die = c.entry.hit_die ?? 8;
+    const row = hitDice.find(h => h.die === die);
+    if (row) row.count += c.level; else hitDice.push({ die, count: c.level });
+  }
+  hitDice.sort((a, b) => b.die - a.die);
 
-  const sc = cls?.spellcasting;
-  const spellcasting = sc && sc.progression !== "none" ? {
-    ability: sc.ability, dc: 8 + pb + mods[sc.ability], attack: pb + mods[sc.ability],
-    slots: sc.progression === "pact" ? null : spellSlots(sc.progression, level),
-    pact: sc.progression === "pact" ? pactSlots(level) : null,
-  } : null;
+  // Spellcasting: one combined slot table across classes, Pact Magic kept separate.
+  const casters = classes.filter(c => c.entry.spellcasting && c.entry.spellcasting.progression !== "none")
+    .map(c => ({ id: c.id, name: c.entry.name, level: c.level, ...c.entry.spellcasting }));
+  const spellcasting = casters.length ? (() => {
+    const first = casters[0];
+    const pact = casters.find(c => c.progression === "pact");
+    return {
+      ability: first.ability, dc: 8 + pb + mods[first.ability], attack: pb + mods[first.ability],
+      slots: multiclassSlots(casters),
+      pact: pact ? pactSlots(pact.level) : null,
+      classes: casters.map(c => ({ id: c.id, name: c.name, ability: c.ability, dc: 8 + pb + mods[c.ability], attack: pb + mods[c.ability] })),
+    };
+  })() : null;
 
   const resources = Object.values(res.resources).map(r => ({
     id: r.id, name: r.name, recharge: r.recharge, short_rest_regain: r.short_rest_regain ?? null, source: r.source,
     max: r.max,
   }));
 
+  // Only the starting class gives starting equipment.
   const gold = ["class", "background"].reduce((n, k) => {
     const entry = k === "class" ? cls : pack.backgrounds?.[build.background];
     const opt = (entry?.starting_equipment ?? []).find(o => o.label === build.equipment?.[k]);
@@ -530,11 +651,11 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   }));
 
   return {
-    level, scores, mods, pb, skills, saves, hp, hitDie: hd,
+    level, scores, mods, pb, skills, saves, hp, hitDie: cls?.hit_die ?? 8, hitDice,
+    classes: classes.map(c => ({ id: c.id, name: c.entry.name, level: c.level, subclass: c.subclass, subclassName: pack.subclasses?.[c.subclass]?.name ?? null })),
     ac: 10 + mods.dex, initiative: mods.dex + (res.initiativeBonus ?? 0),
     speed: res.stats.speed ?? 30, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
     passivePerception: 10 + skills.find(s => s.name === "Perception").bonus,
     proficiencies: res.proficiencies, features: res.features, feats: res.feats, resources, spells, spellcasting, gold,
   };
 }
-

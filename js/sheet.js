@@ -1,7 +1,7 @@
 // The character sheet. Everything it shows is computed from the character file's own
 // snapshot of the content, so content-pack updates never change a finished character.
 // Only `play` (HP, used slots, gear, notes) changes here; the build is read-only.
-import { summarize, titleCase } from "./engine.js";
+import { summarize, normalizeBuild, titleCase } from "./engine.js";
 import { esc, md } from "./render.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal } from "./rules.js";
 
@@ -15,7 +15,7 @@ const ui = { open: new Set() }; // expanded feature/spell rows
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
   if (!data || data.kind !== "character") return "This isn't a character file.";
-  if (data.format > 1) return "This character was saved by a newer version of the builder. Refresh the page and try again.";
+  if (data.format > 2) return "This character was saved by a newer version of the builder. Refresh the page and try again.";
   if (!data.build || !data.snapshot) return "This character file is missing its build or content snapshot.";
   return null;
 }
@@ -29,14 +29,29 @@ export function restoreCharacter() {
     const raw = localStorage.getItem(OPEN_KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s?.file && !validateCharacter(s.file)) state = s;
+      if (s?.file && !validateCharacter(s.file)) { state = s; state.file = upgradeFile(state.file); ensurePlay(); }
     }
   } catch {}
   return state?.file ?? null;
 }
 
+// Format 1 files have one class; format 2 has a classes list and hit dice spent per die size.
+function upgradeFile(file) {
+  if ((file.format ?? 1) >= 2) return file;
+  const f = structuredClone(file);
+  const oldClass = f.build?.class;
+  f.build = normalizeBuild(f.build ?? {});
+  const spent = f.play?.hitDiceSpent;
+  if (typeof spent === "number") {
+    const die = f.snapshot?.classes?.[oldClass]?.hit_die ?? 8;
+    f.play.hitDiceSpent = spent ? { [die]: spent } : {};
+  }
+  f.format = 2;
+  return f;
+}
+
 export function openCharacter(file, { dirty = false } = {}) {
-  state = { file: structuredClone(file), dirty };
+  state = { file: upgradeFile(structuredClone(file)), dirty };
   ensurePlay();
   persist();
 }
@@ -56,7 +71,7 @@ function ensurePlay() {
   const s = computed();
   const p = (state.file.play ??= {});
   p.hp ??= { current: s.hp ?? 0, temp: 0 };
-  p.hitDiceSpent ??= 0;
+  if (typeof p.hitDiceSpent !== "object" || p.hitDiceSpent === null) p.hitDiceSpent = {};
   p.deathSaves ??= { success: 0, fail: 0 };
   p.inspiration ??= false;
   p.exhaustion ??= 0;
@@ -75,7 +90,7 @@ function ensurePlay() {
 function startingEquipmentText() {
   const f = state.file;
   const lines = [];
-  const cls = f.snapshot.classes?.[f.build.class];
+  const cls = f.snapshot.classes?.[f.build.classes?.[0]?.id]; // only the starting class gives equipment
   const bg = f.snapshot.backgrounds?.[f.build.background];
   for (const [entry, pick] of [[cls, f.build.equipment?.class], [bg, f.build.equipment?.background]]) {
     const opt = (entry?.starting_equipment ?? []).find(o => o.label === pick);
@@ -137,8 +152,7 @@ function render() {
   const s = computed();
   const p = f.play;
   const b = f.build;
-  const cls = f.snapshot.classes?.[b.class];
-  const sub = f.snapshot.subclasses?.[b.subclass];
+  const classText = s.classes.map(c => `${c.name}${s.classes.length > 1 ? ` ${c.level}` : ""}${c.subclassName ? ` (${c.subclassName})` : ""}`).join(" / ");
   const species = f.snapshot.species?.[b.species];
   const bg = f.snapshot.backgrounds?.[b.background];
   const exh = p.exhaustion ?? 0;
@@ -151,7 +165,7 @@ function render() {
     <header class="sheet-head">
       <div class="sheet-id">
         <h1>${esc(f.details?.name || "Unnamed character")}</h1>
-        <p>${esc([`Level ${s.level} ${cls?.name ?? ""}${sub ? ` (${sub.name})` : ""}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
+        <p>${esc([`Level ${s.level} ${classText}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
       </div>
       <div class="sheet-actions">
         <button type="button" class="btn" data-rest="short">Short rest</button>
@@ -188,10 +202,11 @@ function render() {
       </div>
 
       <div class="stat-box tracker-box">
-        <span class="label">Hit dice (d${s.hitDie})</span>
-        <span class="stepper"><button type="button" class="step-btn" data-hd="1" ${p.hitDiceSpent >= s.level ? "disabled" : ""} aria-label="Spend a hit die">−</button>
-          <strong>${s.level - p.hitDiceSpent}</strong><span class="muted">/ ${s.level}</span>
-          <button type="button" class="step-btn" data-hd="-1" ${p.hitDiceSpent <= 0 ? "disabled" : ""} aria-label="Regain a hit die">+</button></span>
+        <span class="label">Hit dice</span>
+        ${s.hitDice.map(h => { const used = Math.min(h.count, p.hitDiceSpent[h.die] ?? 0); return `<span class="stepper${s.hitDice.length > 1 ? " hd-row" : ""}"><span class="muted">d${h.die}</span>
+          <button type="button" class="step-btn" data-hd="1" data-die="${h.die}" ${used >= h.count ? "disabled" : ""} aria-label="Spend a d${h.die} hit die">−</button>
+          <strong>${h.count - used}</strong><span class="muted">/ ${h.count}</span>
+          <button type="button" class="step-btn" data-hd="-1" data-die="${h.die}" ${used <= 0 ? "disabled" : ""} aria-label="Regain a d${h.die} hit die">+</button></span>`; }).join("")}
       </div>
       <div class="stat-box tracker-box">
         <span class="label">Death saves</span>
@@ -373,12 +388,13 @@ function renderSpells(s, p, f) {
   };
 
   return `<section class="panel spells-panel"><h2>Spells</h2>
-    ${sc ? `<div class="spell-stats">
-      <div><span class="label">Ability</span><strong>${ABILITIES[sc.ability]}</strong></div>
-      <div><span class="label">Modifier</span><strong>${signed(s.mods[sc.ability])}</strong></div>
-      <div><span class="label">Save DC</span><strong>${sc.dc}</strong></div>
-      <div><span class="label">Attack</span><strong>${signed(sc.attack)}</strong></div>
-    </div>` : ""}
+    ${sc ? (sc.classes?.length > 1 ? sc.classes : [{ ...sc, name: null }]).map(c => `<div class="spell-stats">
+      ${c.name ? `<div><span class="label">Class</span><strong>${esc(c.name)}</strong></div>` : ""}
+      <div><span class="label">Ability</span><strong>${ABILITIES[c.ability]}</strong></div>
+      <div><span class="label">Modifier</span><strong>${signed(s.mods[c.ability])}</strong></div>
+      <div><span class="label">Save DC</span><strong>${c.dc}</strong></div>
+      <div><span class="label">Attack</span><strong>${signed(c.attack)}</strong></div>
+    </div>`).join("") : ""}
     ${slotRow}
     ${levels.map(l => `<h3 class="group-title">${l === 0 ? "Cantrips" : l < 0 ? "Not in the content snapshot" : `${ordinal(l)} level`}</h3>
       <ul class="spell-rows">${byLevel.get(l).sort((a, b) => a.name.localeCompare(b.name)).map(spellRow).join("")}</ul>`).join("")}
@@ -465,7 +481,10 @@ function onClick(e) {
   if (d.death) return change(p => togglePip(p.deathSaves, d.death, Number(d.i)));
   if (d.inspiration !== undefined) return change(p => { p.inspiration = !p.inspiration; });
   if (d.exh) return change(p => { p.exhaustion = clampInt((p.exhaustion ?? 0) + Number(d.exh), 0, 6); });
-  if (d.hd) return change(p => { p.hitDiceSpent = clampInt(p.hitDiceSpent + Number(d.hd), 0, s.level); });
+  if (d.hd) return change(p => {
+    const row = s.hitDice.find(h => String(h.die) === d.die);
+    if (row) p.hitDiceSpent[row.die] = clampInt((p.hitDiceSpent[row.die] ?? 0) + Number(d.hd), 0, row.count);
+  });
   if (d.acReset !== undefined) return change(p => { p.ac = null; });
   if (d.addAttack !== undefined) return change(p => { p.attacks.push({ name: "", bonus: "", damage: "", notes: "" }); });
   if (d.removeAttack) return change(p => { p.attacks.splice(Number(d.removeAttack), 1); });
@@ -502,7 +521,7 @@ function rest(kind, s) {
     if (kind === "long") {
       p.hp.current = s.hp ?? p.hp.current;
       p.hp.temp = 0;
-      p.hitDiceSpent = 0;
+      p.hitDiceSpent = {};
       p.slotsUsed = {};
       p.resourcesUsed = {};
       p.featureUses = {};
