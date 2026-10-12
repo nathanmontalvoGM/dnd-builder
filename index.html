@@ -1,1 +1,29 @@
-<h1>D&D Builder</h1>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Character Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,500;0,700;1,500&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">Character Builder</a>
+    <div class="pack-status" id="pack-status" hidden>
+      <span id="pack-version"></span>
+      <button type="button" class="btn" id="btn-load">Load new pack</button>
+      <button type="button" class="btn btn-quiet" id="btn-remove">Remove pack</button>
+    </div>
+  </header>
+
+  <main id="app" aria-live="polite"></main>
+
+  <input type="file" id="file-input" accept=".json,application/json" hidden>
+  <div class="drop-overlay" id="drop-overlay" hidden><p>Drop the content pack to load it</p></div>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
