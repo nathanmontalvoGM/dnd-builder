@@ -1,12 +1,7 @@
 import { getPack, savePack, removePack } from "./store.js";
 import { KINDS, renderEntry, listSecondary, esc, titleCase, spellLevelLabel } from "./render.js";
-<<<<<<< HEAD
-import { mountWizard, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
-import { mountSheet, unmountSheet, validateCharacter, openCharacter, restoreCharacter, currentCharacter, hasUnsavedChanges } from "./sheet.js";
-=======
 import { mountWizard, mountLevelUp, mountEdit, unmountWizard, hasDraft, draftLabel } from "./wizard.js";
 import { mountSheet, unmountSheet, setSheetPack, validateCharacter, openCharacter, restoreCharacter, currentCharacter, hasUnsavedChanges } from "./sheet.js";
->>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 
 const SUPPORTED_FORMAT = 1;
 const $ = sel => document.querySelector(sel);
@@ -58,6 +53,8 @@ async function loadFile(file) {
   try { await savePack(data); }
   catch { toast("The pack loaded but couldn't be saved in this browser, so you'll need to load it again next visit. Private browsing windows block saving.", "error"); }
   pack = data;
+  setSheetPack(pack);
+  if (sheetMounted) { unmountSheet(); sheetMounted = false; }
   if (wizardMounted) { unmountWizard(); wizardMounted = false; } // remount against the new pack
   toast(`Loaded content pack ${data.meta.version}`);
   render();
@@ -221,11 +218,7 @@ function setChrome(section) {
   }
 }
 
-<<<<<<< HEAD
-let wizardMounted = false;
-=======
 let wizardMounted = false; // false | "create" | "levelup" | "edit"
->>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
 let sheetMounted = false;
 function render() {
   const hash = location.hash || "#/";
@@ -237,8 +230,6 @@ function render() {
   }
   if (sheetMounted) { unmountSheet(); sheetMounted = false; }
   if (!pack) { if (wizardMounted) { unmountWizard(); wizardMounted = false; } renderEmpty(); return; }
-<<<<<<< HEAD
-=======
   if (hash === "#/edit") {
     const char = currentCharacter();
     if (!char) { history.replaceState(null, "", "#/"); render(); return; }
@@ -253,12 +244,11 @@ function render() {
     if (wizardMounted !== "levelup") { if (wizardMounted) unmountWizard(); mountLevelUp(app, pack, char); wizardMounted = "levelup"; }
     return;
   }
->>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
   if (hash.startsWith("#/new")) {
     setChrome("new");
     const fresh = hash === "#/new/fresh";
     if (fresh) history.replaceState(null, "", "#/new");
-    if (!wizardMounted || fresh) { if (wizardMounted) unmountWizard(); mountWizard(app, pack, { fresh }); wizardMounted = true; }
+    if (wizardMounted !== "create" || fresh) { if (wizardMounted) unmountWizard(); mountWizard(app, pack, { fresh }); wizardMounted = "create"; }
     return;
   }
   if (wizardMounted) { unmountWizard(); wizardMounted = false; }
@@ -274,6 +264,7 @@ $("#btn-remove").addEventListener("click", async () => {
   if (!confirm("Remove the content pack from this browser? Your exported character files aren't affected.")) return;
   await removePack().catch(() => {});
   pack = null;
+  setSheetPack(null);
   history.replaceState(null, "", "#/");
   toast("Content pack removed");
   render();
@@ -281,12 +272,6 @@ $("#btn-remove").addEventListener("click", async () => {
 
 window.addEventListener("open-character", e => loadCharacter(e.detail));
 
-<<<<<<< HEAD
-window.addEventListener("hashchange", () => {
-  if (!pack && location.hash !== "#/sheet") { render(); return; }
-  if (location.hash === "#/sheet" && sheetMounted) return;
-  if (location.hash.startsWith("#/new") && wizardMounted && location.hash !== "#/new/fresh") return;
-=======
 // Edits from the builder: replace the open character, unsaved until they save the file.
 window.addEventListener("character-edited", e => {
   openCharacter(e.detail, { dirty: true });
@@ -311,7 +296,6 @@ window.addEventListener("hashchange", () => {
   if (location.hash.startsWith("#/new") && wizardMounted === "create" && location.hash !== "#/new/fresh") return;
   if (location.hash === "#/levelup" && wizardMounted === "levelup") return;
   if (location.hash === "#/edit" && wizardMounted === "edit") return;
->>>>>>> d72a0dcb0a3ca9cfbddd3f932f5361dd5e7e0de9
   render();
   document.querySelector(".detail-pane")?.scrollTo?.(0, 0);
   window.scrollTo(0, 0);
@@ -332,5 +316,6 @@ window.addEventListener("drop", e => {
 
 pack = await getPack();
 if (pack && validatePack(pack)) pack = null;
+setSheetPack(pack);
 restoreCharacter();
 render();

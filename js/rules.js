@@ -16,6 +16,17 @@ export function spellSlots(progression, classLevel) {
   return eff ? FULL[eff - 1] : [];
 }
 
+// Spell slots for a character's slot-casting classes (Pact Magic is separate).
+// One class: its own table. Several (2024 multiclass rule): add full-caster levels, half-caster
+// levels rounded up, and third-caster levels rounded down, then read the full-caster table.
+export function multiclassSlots(casters) {
+  const slotted = casters.filter(c => ["full", "half", "third"].includes(c.progression));
+  if (!slotted.length) return [];
+  if (slotted.length === 1) return spellSlots(slotted[0].progression, slotted[0].level);
+  const eff = slotted.reduce((n, c) => n + (c.progression === "full" ? c.level : c.progression === "half" ? Math.ceil(c.level / 2) : Math.floor(c.level / 3)), 0);
+  return eff ? FULL[Math.min(20, eff) - 1] : [];
+}
+
 // Warlock Pact Magic: all slots are the same level and recharge on a short rest.
 export function pactSlots(classLevel) {
   const count = classLevel >= 17 ? 4 : classLevel >= 11 ? 3 : classLevel >= 2 ? 2 : 1;
