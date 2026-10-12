@@ -630,64 +630,51 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .feature-toggle::after { order: 4; }
 .death .pips { flex-wrap: nowrap; gap: 0.2rem; }
 
-/* Hit dice with more than one die size (multiclass): one compact row per size */
-.tracker-box .stepper.hd-row { gap: 0.15rem; }
-.tracker-box .stepper.hd-row strong { font-size: 1.1rem; min-width: 1rem; }
-.tracker-box .stepper.hd-row .step-btn { width: 1.5rem; height: 1.5rem; }
-
-/* Multiclass section on the creation wizard's class step */
-.mc-box { margin: 1.5rem 0; padding: 1rem 1.25rem; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); }
-.mc-box h2 { margin-top: 0; }
-.mc-rows { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.5rem; }
-.mc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
-.mc-row label { display: inline-flex; align-items: center; gap: 0.4rem; }
-.mc-box .warn-box { margin-top: 0.75rem; }
-.mc-box .field { max-width: 26rem; grid-template-columns: minmax(0, 1fr); }
-.mc-box .field select { width: 100%; }
-.mc-row select {
-  font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.35em 0.5em;
+/* ---------- hiding sheet elements ---------- */
+.feature-group + .feature-group .group-title { margin-top: 0.9rem; }
+.layout-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1.25rem;
+  background: var(--gilt-soft); border: 1px solid var(--gilt); border-radius: var(--radius);
+  padding: 0.75rem 1rem; margin-bottom: 1.25rem;
 }
+.layout-banner p { margin: 0; max-width: 52rem; }
 
-/* Armor toggles and AC method */
-.armor-box { grid-column: span 2; text-align: left; gap: 0.35rem; }
-.armor-box .armor-controls { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
-.armor-box label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--ink); }
-.armor-box select { font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.15em 0.35em; max-width: 100%; }
-.armor-box small { text-align: left; }
+.hide-btn {
+  font: 500 0.78rem/1 var(--sans); padding: 0.3rem 0.55rem; border-radius: 999px; cursor: pointer;
+  color: var(--muted); background: var(--surface); border: 1px solid var(--rule);
+}
+.hide-btn:hover { color: var(--ink); border-color: var(--ink); }
+.hide-btn.is-off { color: var(--gilt); border-color: var(--gilt); background: var(--gilt-soft); }
 
-/* Advantage markers on saves, skills and initiative */
-.adv { display: inline-block; margin-left: 0.35rem; padding: 0 0.3rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; line-height: 1.4; letter-spacing: 0.02em; color: var(--verdigris); border: 1px solid currentColor; vertical-align: 1px; cursor: help; }
-.adv.adv-cond { color: var(--muted); border-style: dashed; }
+/* boxes and panels: button sits in the top-right corner */
+.layout-mode .stat-box, .layout-mode .hp-box, .layout-mode .ability-block, .layout-mode .panel,
+.layout-mode .feature-group, .layout-mode .slot-row, .layout-mode .spell-stats { position: relative; }
+.stat-box > .hide-btn, .hp-box > .hide-btn, .ability-block > .hide-btn, .panel > .hide-btn,
+.feature-group > .hide-btn, .slot-row > .hide-btn, .spell-stats > .hide-btn {
+  position: absolute; top: 0.4rem; right: 0.4rem; z-index: 1;
+}
+.layout-mode .stat-box, .layout-mode .hp-box { padding-top: 2rem; }
+.layout-mode .ability-top { padding-right: 3.5rem; }
+.layout-mode .slot-row, .layout-mode .spell-stats { padding-right: 4rem; }
 
-/* Numbers on feature rows and the At a glance panel */
-.chips { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; margin-left: 0.5rem; vertical-align: middle; }
-.chip-sm { font-size: 0.75rem; padding: 0.05rem 0.4rem; border-radius: 999px; background: var(--gilt-soft); color: var(--ink); white-space: nowrap; }
-.feature-facts { margin-bottom: 0.6rem; }
-.glance { grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); }
-.glance dd .muted { font-size: 0.8rem; }
-.attack-table.computed { margin-bottom: 0.75rem; }
-.attack-table.computed th { text-align: left; font-weight: 600; }
-.attack-table.computed td, .attack-table.computed th { padding: 0.35rem 0.5rem 0.35rem 0; }
+/* rows: button sits before the name */
+.layout-mode .feature-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.6rem; }
+.layout-mode .feature-row > .feature-toggle { flex: 1 1 12rem; width: auto; }
+.layout-mode .feature-row > .feature-body { flex-basis: 100%; }
+.layout-mode .res-row > .hide-btn { order: -1; }
 
-/* Older content pack notice */
-.update-note { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; border: 1px solid var(--rule); background: var(--surface); border-radius: var(--radius); padding: 0.6rem 0.9rem; margin-bottom: 1rem; }
-.update-note p { margin: 0; color: var(--muted); }
-.armor-box { min-width: 0; }
-.armor-box label.ac-from { display: grid; gap: 0.2rem; width: 100%; }
-.armor-box label.ac-from select { width: 100%; }
-.attack-table.computed th, .attack-table.computed td:nth-child(2), .attack-table.computed td:nth-child(3) { white-space: nowrap; }
-.attack-table.computed th { font-size: 1rem; color: var(--ink); }
+/* hidden items, only ever visible while editing the layout */
+/* fade the content, not the Show button, so it stays easy to find */
+.is-hidden > :not(.hide-btn), .spell-row.is-hidden .spell-line > :not(.hide-btn) { opacity: 0.4; }
+.is-hidden.stat-box, .is-hidden.hp-box, .is-hidden.ability-block, .is-hidden.panel { border-style: dashed; }
 
-/* Feature groups: one per class, then species, background, feats */
-.panel-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 1rem; }
-.panel-tools { font-size: 0.85rem; color: var(--muted); }
-.feature-group { border-top: 1px solid var(--rule); }
-.feature-group:first-of-type { border-top: 0; }
-.group-toggle { display: flex; width: 100%; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0 0.35rem; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; }
-.group-toggle .group-title { margin: 0; }
-.group-toggle::after { content: "−"; color: var(--muted); margin-left: 0.5rem; }
-.feature-group.closed .group-toggle::after { content: "+"; }
-.group-toggle > .muted { margin-left: auto; font-size: 0.85rem; }
-.group-sub { font-family: var(--sans, inherit); font-weight: 400; font-size: 0.88rem; color: var(--muted); }
-.feature-group .feature-rows { margin-bottom: 0.6rem; }
+/* if a whole column is hidden, the others take its space */
+@media (min-width: 1251px) {
+  .sheet-grid:not(.has-abil) { grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem); }
+  .sheet-grid:not(.has-side) { grid-template-columns: minmax(15rem, 17rem) minmax(0, 1fr); }
+  .sheet-grid:not(.has-main) { grid-template-columns: minmax(15rem, 17rem) minmax(15rem, 1fr); }
+  .sheet-grid:not(.has-abil):not(.has-side), .sheet-grid:not(.has-abil):not(.has-main), .sheet-grid:not(.has-main):not(.has-side) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 1250px) and (min-width: 761px) {
+  .sheet-grid:not(.has-abil), .sheet-grid:not(.has-main) { grid-template-columns: minmax(0, 1fr); }
+}

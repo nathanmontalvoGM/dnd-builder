@@ -1,11 +1,10 @@
 // The character creation wizard. All state lives in `draft`; every change re-runs the
 // engine and re-renders, so what's on screen is always what the rules say.
-import { resolve, summarize, emptyBuild, normalizeBuild, setStartingClass, setTotalLevel, setSubclass, addClass, removeClass, changeClass, setClassLevel, levelUp, multiclassBlockers, mergeContent, snapshotFor, finalScores, allDecisions, baseScores, asiIncrements, titleCase } from "./engine.js";
+import { resolve, summarize, emptyBuild, allDecisions, baseScores, asiIncrements, titleCase } from "./engine.js";
 import { esc, md, renderGrants, makeLinker } from "./render.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, STANDARD_ARRAY, POINT_BUY, ALIGNMENTS, mod, signed, ordinal } from "./rules.js";
 
 const DRAFT_KEY = "character-builder:draft";
-const LEVELUP_KEY = "character-builder:levelup";
 
 export const STEPS = [
   { id: "class", title: "Class" },
@@ -24,35 +23,27 @@ export function loadDraft() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d?.build) return { details: {}, step: "class", ...d, build: normalizeBuild(d.build) };
+      if (d?.build) return { details: {}, step: "class", ...d, build: { ...emptyBuild(), ...d.build } };
     }
   } catch {}
   return null;
 }
 function saveDraft(draft) {
-  try { localStorage.setItem(mode === "levelup" ? LEVELUP_KEY : DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
 }
 export function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
 }
 export function hasDraft() {
   const d = loadDraft();
-  return !!(d && (d.build.classes.length || d.build.background || d.build.species));
+  return !!(d && (d.build.class || d.build.background || d.build.species));
 }
 export function draftLabel(pack) {
   const d = loadDraft();
   if (!d) return "";
-  const cls = classLine(d.build, pack);
+  const cls = pack.classes?.[d.build.class]?.name;
   const name = d.details?.name?.trim();
   return [name, cls ? `level ${d.build.level} ${cls}` : null].filter(Boolean).join(", ");
-}
-
-// "Monk" for one class, "Monk 3 / Barbarian 2" for several.
-function classLine(build, p = pack) {
-  const list = build.classes;
-  const name = c => p?.classes?.[c.id]?.name ?? titleCase(c.id);
-  if (!list.length) return "";
-  return list.length === 1 ? name(list[0]) : list.map(c => `${name(c)} ${c.level}`).join(" / ");
 }
 
 // ---------- module state ----------
@@ -60,13 +51,9 @@ let draft = null;
 let pack = null;
 let root = null;
 let ui = { search: {}, created: null };
-let mode = "create"; // "create" | "levelup"
-let lu = null;       // level up: { file, base, res0, sum0 }
 
 export function mountWizard(el, contentPack, { fresh = false } = {}) {
   root = el;
-  mode = "create";
-  lu = null;
   pack = contentPack;
   if (fresh) clearDraft();
   draft = loadDraft() ?? { build: emptyBuild(), details: {}, step: "class" };
@@ -101,7 +88,6 @@ function stepStatus(res) {
 
 function render() {
   if (!root) return;
-  if (mode === "levelup") return renderLevelUp();
   const focusId = document.activeElement?.dataset?.focus;
   const res = resolve(draft.build, pack);
   const sum = summarize(draft.build, pack, res);
@@ -143,9 +129,9 @@ function render() {
 
 function renderLiveSummary(s) {
   const b = draft.build;
+  const cls = pack.classes?.[b.class];
   const name = draft.details.name?.trim();
-  const cl = classLine(b);
-  const line = [pack.species?.[b.species]?.name, cl ? (b.classes.length > 1 ? cl : `${cl} ${b.level}`) : null].filter(Boolean).join(" ");
+  const line = [pack.species?.[b.species]?.name, cls ? `${cls.name} ${b.level}` : null].filter(Boolean).join(" ");
   return `
     <h2>${esc(name || "New character")}</h2>
     <p class="muted">${esc(line || "Nothing picked yet")}</p>
@@ -191,8 +177,7 @@ function entryCards(bucket, field, current, describe) {
 
 function stepClass(res) {
   const b = draft.build;
-  const start = b.classes[0];
-  const cls = pack.classes?.[start?.id];
+  const cls = pack.classes?.[b.class];
   return `${heading("Class", "Your class decides your role in a fight, your hit points and most of your abilities.")}
     <div class="field-row">
       <label class="field"><span>Starting level</span>
@@ -200,42 +185,8 @@ function stepClass(res) {
       </label>
       <p class="muted field-note">Most campaigns start at level 1. Ask your DM if yours starts higher.</p>
     </div>
-    ${b.classes.length > 1 ? `<p class="muted">Multiclassed: ${esc(classLine(b))}. The card below is your starting class.</p>` : ""}
-    ${entryCards("classes", "class", start?.id, e => [e.hit_die ? `d${e.hit_die} hit die` : "", (e.primary_ability ?? []).map(a => ABILITIES[a]).join(" or ")].filter(Boolean).join(", "))}
-    ${multiclassBox(res)}
-    ${cls ? `<h2>${esc(b.classes.length > 1 ? "Class" : cls.name)} choices</h2>${renderDecisions(res.decisions.class)}` : ""}`;
-}
-
-// Starting above level 1: split the levels across more than one class.
-function multiclassBox(res) {
-  const b = draft.build;
-  if (!b.classes.length || b.level < 2) return "";
-  const all = Object.entries(pack.classes ?? {}).sort(([, a], [, c]) => a.name.localeCompare(c.name));
-  const taken = new Set(b.classes.map(c => c.id));
-  const scores = finalScores(b, res);
-  const blockers = b.classes.length > 1 ? multiclassBlockers(b, pack, b.classes[1].id, scores) : [];
-  const levelOpts = (cur, max) => Array.from({ length: max }, (_, i) => `<option value="${i + 1}" ${cur === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("");
-  const rows = b.classes.slice(1).map((c, j) => {
-    const i = j + 1;
-    const max = b.classes[0].level + c.level - 1;
-    return `<li class="mc-row">
-      <select data-mc-class="${i}" aria-label="Class">${all.filter(([id]) => id === c.id || !taken.has(id)).map(([id, e]) => `<option value="${esc(id)}" ${id === c.id ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select>
-      <label>Level <select data-mc-level="${i}">${levelOpts(c.level, max)}</select></label>
-      <button type="button" class="btn btn-quiet" data-mc-remove="${i}">Remove</button>
-    </li>`;
-  }).join("");
-  const addable = all.filter(([id]) => !taken.has(id));
-  const canAdd = b.classes[0].level >= 2 && addable.length;
-  return `<section class="mc-box">
-    <h2>Multiclass</h2>
-    <p class="muted">Starting at level ${b.level}, you can split your levels across classes. ${esc(pack.classes?.[b.classes[0].id]?.name ?? "Your starting class")} is your starting class at level ${b.classes[0].level}; it gives your saving throws and full proficiencies. Each class you add gives only its multiclass proficiencies.</p>
-    ${rows ? `<ul class="mc-rows">${rows}</ul>` : ""}
-    ${canAdd ? `<label class="field"><span>Add a class</span><select data-mc-add><option value="">Choose a class</option>${addable.map(([id, e]) => {
-      const why = multiclassBlockers(b, pack, id, scores);
-      return `<option value="${esc(id)}">${esc(e.name)}${why.length ? " (needs higher scores)" : ""}</option>`;
-    }).join("")}</select></label>` : b.classes[0].level < 2 ? `<p class="muted">Your starting class is at level 1, so there are no levels left to give another class. Raise your starting level first.</p>` : ""}
-    ${blockers.length ? `<div class="warn-box"><p><strong>Multiclassing needs a score of 13 in each class's primary ability.</strong></p><ul>${blockers.map(x => `<li>${esc(x)}</li>`).join("")}</ul><p class="muted">Your DM can approve it anyway on the review step.</p></div>` : ""}
-  </section>`;
+    ${entryCards("classes", "class", b.class, e => [e.hit_die ? `d${e.hit_die} hit die` : "", (e.primary_ability ?? []).map(a => ABILITIES[a]).join(" or ")].filter(Boolean).join(", "))}
+    ${cls ? `<h2>${esc(cls.name)} choices</h2>${renderDecisions(res.decisions.class)}` : ""}`;
 }
 
 function stepPick(field, bucket, title, res) {
@@ -257,9 +208,9 @@ function stepPick(field, bucket, title, res) {
 }
 
 // ---------- decisions ----------
-function renderDecisions(list, { flat = false } = {}) {
+function renderDecisions(list) {
   if (!list?.length) return "";
-  return `<div class="decisions">${list.map(d => renderDecision(d, flat)).join("")}</div>`;
+  return `<div class="decisions">${list.map(renderDecision).join("")}</div>`;
 }
 
 function decisionHead(d) {
@@ -268,7 +219,7 @@ function decisionHead(d) {
     <p class="decision-source">From ${esc(d.source)}${d.swap === "long_rest" ? ". You can change this after a long rest" : d.swap === "level_up" ? ". You can change this when you gain a level" : ""}</p>`;
 }
 
-function renderDecision(d, flat = false) {
+function renderDecision(d) {
   let body;
   if (d.kind === "asi") body = renderPointAsi(d);
   else if (d.fixed) body = `<p>${esc(d.options.find(o => o.value === d.value[0])?.label ?? titleCase(d.value[0]))}, set by ${d.step === "background" ? "your background" : d.step === "species" ? "your species" : "the feature that grants this"}.</p>`;
@@ -279,7 +230,7 @@ function renderDecision(d, flat = false) {
   else body = renderChips(d);
   return `<div class="decision ${d.complete ? "is-complete" : ""}" id="d-${esc(cssId(d.key))}">
     ${decisionHead(d)}${body}
-    ${!flat && d.children?.length ? `<div class="decision-children">${renderDecisions(d.children)}</div>` : ""}
+    ${d.children?.length ? `<div class="decision-children">${renderDecisions(d.children)}</div>` : ""}
   </div>`;
 }
 
@@ -354,7 +305,7 @@ function stepAbilities(res, sum) {
   const b = draft.build;
   const method = b.abilities.method;
   const base = baseScores(b);
-  const cls = pack.classes?.[b.classes[0]?.id];
+  const cls = pack.classes?.[b.class];
   const bgAsi = res.decisions.abilities.find(d => d.kind === "asi" && d.asi.mode === "background");
   const otherInc = Object.fromEntries(ABILITY_KEYS.map(a => [a, 0]));
   for (const d of res.asi) {
@@ -421,11 +372,11 @@ function stepAbilities(res, sum) {
 
 // ---------- spells ----------
 function stepSpells(res) {
-  const classes = draft.build.classes.map(c => pack.classes?.[c.id]).filter(Boolean);
-  const casters = classes.filter(c => c.spellcasting && c.spellcasting.progression !== "none");
-  const intro = !classes.length ? "Choose a class first."
-    : !casters.length ? `${esc(classes.map(c => c.name).join(" and "))} ${classes.length > 1 ? "don't" : "doesn't"} cast spells from a class list. Spells from your species, background or feats are picked on those steps.`
-    : `${casters.map(c => `${esc(c.name)}s cast with ${ABILITIES[c.spellcasting.ability]}`).join("; ")}. Spells you always have prepared, like domain spells, don't count against these numbers.`;
+  const cls = pack.classes?.[draft.build.class];
+  const sc = cls?.spellcasting;
+  const intro = !cls ? "Choose a class first."
+    : !sc || sc.progression === "none" ? `${esc(cls.name)}s don't cast spells from a class list. Spells from your species, background or feats are picked on those steps.`
+    : `${esc(cls.name)}s cast with ${ABILITIES[sc.ability]}. Spells you always have prepared, like domain spells, don't count against these numbers.`;
   return `${heading("Spells", intro)}${renderDecisions(res.decisions.spells)}`;
 }
 
@@ -444,8 +395,7 @@ function stepEquipment(sum) {
       </label>`).join("")}</div>`;
   };
   return `${heading("Equipment", "Pick a starting package from your class and your background. You'll list the actual items in the equipment box on your sheet; the builder only tracks your gold.")}
-    <h2>${esc(pack.classes?.[b.classes[0]?.id]?.name ?? "Class")}</h2>${block("class", pack.classes?.[b.classes[0]?.id])}
-    ${b.classes.length > 1 ? `<p class="muted">Only your starting class gives starting equipment.</p>` : ""}
+    <h2>${esc(pack.classes?.[b.class]?.name ?? "Class")}</h2>${block("class", pack.classes?.[b.class])}
     <h2>${esc(pack.backgrounds?.[b.background]?.name ?? "Background")}</h2>${block("background", pack.backgrounds?.[b.background])}
     <p class="gold-total">Starting gold: <strong>${sum.gold} GP</strong></p>`;
 }
@@ -483,7 +433,7 @@ function stepReview(res, s) {
     <div class="review-grid">
       <section><h2>Abilities</h2><table class="mini-table">${ABILITY_KEYS.map(a => `<tr><th scope="row">${ABILITIES[a]}</th><td>${s.scores[a]}</td><td>${signed(s.mods[a])}</td><td class="muted">save ${signed(s.saves.find(x => x.ability === a).bonus)}${s.saves.find(x => x.ability === a).prof ? " ●" : ""}</td></tr>`).join("")}</table></section>
       <section><h2>Combat</h2><dl class="facts compact">
-        <div><dt>Hit points</dt><dd>${s.hp ?? "—"}</dd></div><div><dt>Hit dice</dt><dd>${s.hitDice.map(h => `${h.count}d${h.die}`).join(" + ")}</dd></div>
+        <div><dt>Hit points</dt><dd>${s.hp ?? "—"}</dd></div><div><dt>Hit dice</dt><dd>${s.level}d${s.hitDie}</dd></div>
         <div><dt>Armor class</dt><dd>${s.ac} unarmored</dd></div><div><dt>Initiative</dt><dd>${signed(s.initiative)}</dd></div>
         <div><dt>Speed</dt><dd>${s.speed} ft</dd></div><div><dt>Passive Perception</dt><dd>${s.passivePerception}</dd></div>
         ${s.darkvision ? `<div><dt>Darkvision</dt><dd>${s.darkvision} ft</dd></div>` : ""}
@@ -503,7 +453,7 @@ function stepReview(res, s) {
       ${s.resources.map(r => `<li><strong>${esc(r.name)}</strong> <span class="muted">${r.max} uses, ${esc(r.source)}</span></li>`).join("")}</ul>
     ${spellRows.length ? `<h2>Spells</h2>${s.spellcasting?.slots?.length ? `<p class="muted">Spell slots: ${s.spellcasting.slots.map((n, i) => `${n} ${ordinal(i + 1)}`).join(", ")}</p>` : ""}
       <ul class="spell-review">${spellRows.map(sp => `<li><span>${esc(sp.name)}</span><span class="muted">${esc([sp.level === 0 ? "cantrip" : sp.level ? `level ${sp.level}` : null, sp.always_prepared ? "always prepared" : null, sp.free_cast ? "free cast" : null, sp.cast_ability && sp.cast_ability !== s.spellcasting?.ability ? `${ABBR[sp.cast_ability]} (DC ${sp.dc})` : null].filter(Boolean).join(", "))}</span></li>`).join("")}</ul>` : ""}
-    ${info.length ? `<details class="info-notes"><summary>${info.length} note${info.length === 1 ? "" : "s"}</summary><ul>${info.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul></details>` : ""}
+    ${info.length ? `<details class="info-notes"><summary>${info.length} note${info.length === 1 ? "" : "s"} about missing content</summary><ul>${info.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul></details>` : ""}
     <div class="create-row">
       <button type="button" class="btn btn-primary" data-create ${(blocking.length || nameMissing) && !draft.build.overrides ? "disabled" : ""}>Create character and download file</button>
       ${(blocking.length || nameMissing) && !draft.build.overrides ? `<p class="muted">Finish the items above, or tick the DM approval box.</p>` : ""}
@@ -531,14 +481,14 @@ function makeCharacterFile() {
   }
   const now = new Date().toISOString();
   return {
-    format: 2,
+    format: 1,
     kind: "character",
     id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     created: now,
     updated: now,
     pack: { version: pack.meta.version, built: pack.meta.built },
     details: { ...draft.details },
-    build: normalizeBuild(structuredClone(draft.build)),
+    build: structuredClone(draft.build),
     play: {},       // filled in by the sheet: current HP, used slots, equipment, notes
     snapshot,       // the content this character was built with, so pack updates don't change it
   };
@@ -558,10 +508,8 @@ const slug = s => (s || "character").toLowerCase().replace(/[^a-z0-9]+/g, "-").r
 
 // ---------- events ----------
 function setChoice(key, value, checked, choose) {
-  if (mode === "levelup" && !levelUpKeys().has(key)) return; // earlier choices are locked
   update(d => {
-    const sub = key.match(/^class\.(.+)\/subclass$/);
-    if (sub) { d.build = setSubclass(d.build, sub[1], value); return; }
+    if (key === `class.${d.build.class}/subclass`) { d.build.subclass = value; return; }
     const cur = Array.isArray(d.build.choices[key]) ? d.build.choices[key] : [];
     let next;
     if (choose === 1) next = [value];
@@ -574,13 +522,8 @@ function setChoice(key, value, checked, choose) {
 function onChange(e) {
   const t = e.target;
   if (t.dataset.key) return setChoice(t.dataset.key, t.value, t.checked, Number(t.dataset.choose));
-  if (t.dataset.luClass) return update(d => { d.classId = t.value; d.build = { ...levelUp(lu.base, t.value), choices: d.build.choices }; });
-  if (t.matches("[data-mc-add]")) return t.value ? update(d => { d.build = addClass(d.build, t.value); }) : undefined;
-  if (t.dataset.mcClass) return update(d => { d.build = changeClass(d.build, Number(t.dataset.mcClass), t.value); });
-  if (t.dataset.mcLevel) return update(d => { d.build = setClassLevel(d.build, Number(t.dataset.mcLevel), Number(t.value)); });
-  if (t.dataset.pick === "class") return update(d => { d.build = setStartingClass(d.build, t.value); });
-  if (t.dataset.pick) return update(d => { d.build[t.dataset.pick] = t.value; });
-  if (t.dataset.field === "level") return update(d => { d.build = setTotalLevel(d.build, Number(t.value)); });
+  if (t.dataset.pick) return update(d => { d.build[t.dataset.pick] = t.value; if (t.dataset.pick === "class") d.build.subclass = null; });
+  if (t.dataset.field === "level") return update(d => { d.build.level = Number(t.value); });
   if (t.hasAttribute("data-method")) return update(d => {
     d.build.abilities.method = t.value;
     if (t.value === "pointbuy") d.build.abilities.scores = Object.fromEntries(ABILITY_KEYS.map(a => [a, Math.min(15, Math.max(8, d.build.abilities.scores[a] ?? 8))]));
@@ -641,10 +584,6 @@ function onClick(e) {
     window.scrollTo({ top: 0 });
     return;
   }
-  if (t.dataset.mcRemove) return update(d => { d.build = removeClass(d.build, Number(t.dataset.mcRemove)); });
-  if (t.hasAttribute("data-apply")) return applyLevelUp();
-  if (t.hasAttribute("data-cancel-levelup")) { clearLevelUp(); location.hash = "#/sheet"; return; }
-  if (t.dataset.asi && mode === "levelup" && !levelUpKeys().has(t.dataset.asi)) return;
   if (t.dataset.asi) return update(d => {
     const v = { ...(d.build.choices[t.dataset.asi] ?? {}) };
     v[t.dataset.ab] = Math.max(0, (v[t.dataset.ab] ?? 0) + Number(t.dataset.delta));
@@ -676,180 +615,4 @@ function onClick(e) {
     saveDraft(draft);
     render();
   }
-}
-
-// ---------- level up ----------
-// Level Up reuses the wizard's choice screens. It starts from the character's finished build, adds one
-// level, and only shows decisions that are new (or were never finished). Earlier picks stay locked,
-// except choices marked `swap: level_up`.
-const LU_STEPS = [
-  { id: "lu-class", title: "Class" },
-  { id: "lu-choices", title: "Choices" },
-  { id: "lu-review", title: "Review" },
-];
-
-export function mountLevelUp(el, contentPack, file) {
-  root = el;
-  mode = "levelup";
-  pack = mergeContent(contentPack, file.snapshot);
-  const base = normalizeBuild(file.build);
-  const res0 = resolve(base, pack);
-  lu = { file, base, res0, sum0: summarize(base, pack, res0), done0: new Set(allDecisions(res0).filter(d => d.complete).map(d => d.key)) };
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(LEVELUP_KEY)); } catch {}
-  // Resume only if it's the same character at the same level.
-  draft = saved?.fileId === file.id && saved?.baseLevel === base.level
-    ? saved
-    : { fileId: file.id, baseLevel: base.level, classId: null, build: structuredClone(base), details: file.details ?? {}, step: "lu-class" };
-  ui = { search: {}, created: null };
-  root.addEventListener("change", onChange);
-  root.addEventListener("input", onInput);
-  root.addEventListener("click", onClick);
-  render();
-}
-
-function clearLevelUp() {
-  try { localStorage.removeItem(LEVELUP_KEY); } catch {}
-}
-
-// Decisions the player can touch in this level up.
-function levelUpDecisions(res) {
-  if (!draft.classId) return [];
-  return allDecisions(res).filter(d => !d.complete || !lu.done0.has(d.key) || d.swap === "level_up");
-}
-function levelUpKeys() {
-  return new Set(levelUpDecisions(resolve(draft.build, pack)).map(d => d.key));
-}
-
-// Warnings this level up introduced (earlier ones were already approved or are the DM's call).
-function newWarnings(res) {
-  const before = new Set(lu.res0.warnings.map(w => w.text));
-  return res.warnings.filter(w => !w.info && !before.has(w.text));
-}
-
-function renderLevelUp() {
-  const focusId = document.activeElement?.dataset?.focus;
-  const res = resolve(draft.build, pack);
-  const sum = summarize(draft.build, pack, res);
-  const idx = LU_STEPS.findIndex(x => x.id === draft.step);
-  const open = levelUpDecisions(res).filter(d => !d.complete).length;
-  const nav = LU_STEPS.map((x, i) => {
-    const n = x.id === "lu-class" ? (draft.classId ? 0 : 1) : x.id === "lu-choices" ? open : 0;
-    const state = x.id === draft.step ? "current" : n ? "open" : i < idx ? "done" : "todo";
-    return `<li><button type="button" data-step="${x.id}" class="step-${state}" ${x.id === draft.step ? 'aria-current="step"' : ""} ${x.id !== "lu-class" && !draft.classId ? "disabled" : ""}>
-      <span class="step-num">${i + 1}</span><span class="step-title">${esc(x.title)}</span>
-      ${state === "open" && x.id === "lu-choices" ? `<span class="step-flag">${n} to finish</span>` : ""}</button></li>`;
-  }).join("");
-  const body = draft.step === "lu-choices" ? luChoices(res) : draft.step === "lu-review" ? luReview(res, sum) : luClass(res);
-  const next = LU_STEPS[idx + 1];
-  root.innerHTML = `
-    <div class="wizard">
-      <nav class="steps" aria-label="Level up steps"><ol>${nav}</ol></nav>
-      <section class="step-body" aria-labelledby="step-heading">
-        ${body}
-        <div class="step-nav">
-          ${idx > 0 ? `<button type="button" class="btn" data-go="${LU_STEPS[idx - 1].id}">Back to ${esc(LU_STEPS[idx - 1].title.toLowerCase())}</button>` : `<button type="button" class="btn" data-cancel-levelup>Cancel</button>`}
-          ${next && draft.classId ? `<button type="button" class="btn btn-primary" data-go="${next.id}">Next: ${esc(next.title.toLowerCase())}</button>` : ""}
-        </div>
-      </section>
-      <aside class="live-summary" aria-label="Character after this level">${renderLiveSummary(sum)}</aside>
-    </div>`;
-  for (const [key, q] of Object.entries(ui.search)) filterList(key, q);
-  if (focusId) root.querySelector(`[data-focus="${CSS.escape(focusId)}"]`)?.focus?.();
-}
-
-function luClass(res) {
-  const base = lu.base;
-  const name = lu.file.details?.name || "Your character";
-  if (base.level >= 20) return `${heading("Level up", `${esc(name)} is level 20, the highest level.`)}`;
-  const scores = finalScores(base, lu.res0);
-  const pick = draft.classId;
-  const card = (id, title, sub, note) => `
-    <label class="pick-card ${pick === id ? "selected" : ""}">
-      <input type="radio" name="lu-class" data-lu-class="1" value="${esc(id)}" ${pick === id ? "checked" : ""}>
-      <span class="pick-name">${esc(title)}</span>
-      <span class="pick-sub">${esc(sub)}</span>
-      ${note ? `<span class="option-warn">${esc(note)}</span>` : ""}
-    </label>`;
-  const current = base.classes.map(c => {
-    const e = pack.classes?.[c.id];
-    return card(c.id, `${e?.name ?? titleCase(c.id)} ${c.level} → ${c.level + 1}`, e?.hit_die ? `d${e.hit_die} hit die` : "", null);
-  }).join("");
-  const others = Object.entries(pack.classes ?? {}).filter(([id]) => !base.classes.some(c => c.id === id))
-    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
-    .map(([id, e]) => {
-      const why = multiclassBlockers(base, pack, id, scores);
-      return card(id, `${e.name} 1`, [e.hit_die ? `d${e.hit_die} hit die` : "", "new class"].filter(Boolean).join(", "), why.length ? `Not eligible: ${why.join("; ")}` : null);
-    }).join("");
-  return `${heading("Level up", `${esc(name)} is going from level ${base.level} to ${base.level + 1}. Take the level in a class you have, or start a new one.`)}
-    <h2>Your classes</h2><div class="pick-grid" role="radiogroup" aria-label="Your classes">${current}</div>
-    ${others ? `<h2>Multiclass into a new class</h2>
-      <p class="muted">You need 13 in the primary ability of the new class and of every class you already have. A new class gives only its multiclass proficiencies, and its first level gives the average hit points, not the maximum.</p>
-      <div class="pick-grid" role="radiogroup" aria-label="New classes">${others}</div>` : ""}`;
-}
-
-function luChoices(res) {
-  const all = levelUpDecisions(res);
-  const before = new Set(allDecisions(lu.res0).map(d => d.key));
-  const list = all.filter(d => !before.has(d.key) || d.swap === "level_up");
-  const leftover = all.filter(d => before.has(d.key) && d.swap !== "level_up");
-  const cls = pack.classes?.[draft.classId];
-  const entry = draft.build.classes.find(c => c.id === draft.classId);
-  return `${heading("Choices", `New choices from ${esc(cls?.name ?? "your class")} level ${entry?.level ?? ""}. Earlier choices stay as they are.`)}
-    ${list.length ? renderDecisions(list, { flat: true }) : `<p class="muted">Nothing new to choose at this level.</p>`}
-    ${leftover.length ? `<h2>Unfinished from before</h2>
-      <p class="muted">These were left open when the character was made or last levelled. You can finish them now; they don't block this level up.</p>
-      ${renderDecisions(leftover, { flat: true })}` : ""}`;
-}
-
-function luReview(res, sum) {
-  const s0 = lu.sum0;
-  const keys0 = new Set(s0.features.map(f => f.key));
-  const newFeatures = sum.features.filter(f => !keys0.has(f.key));
-  const res0 = new Map(s0.resources.map(r => [r.id, r]));
-  const resChanges = sum.resources.filter(r => res0.get(r.id)?.max !== r.max);
-  const slots0 = (s0.spellcasting?.slots ?? []).join();
-  const slots1 = sum.spellcasting?.slots ?? [];
-  const blocking = newWarnings(res);
-  const open = levelUpDecisions(res).filter(d => !d.complete);
-  const needsOk = blocking.length > 0;
-  const fmtDice = s => s.hitDice.map(h => `${h.count}d${h.die}`).join(" + ");
-  return `${heading("Review", "Check the changes, then apply them to the open character. Save the file from the sheet afterward.")}
-    ${needsOk ? `<div class="warn-box"><h2>${blocking.length} thing${blocking.length === 1 ? "" : "s"} to look at</h2>
-      <ul>${blocking.map(w => `<li>${esc(w.text)}</li>`).join("")}</ul>
-      <label class="override"><input type="checkbox" data-override ${draft.build.overrides ? "checked" : ""}> My DM has approved this level up anyway</label></div>` : ""}
-    <dl class="facts compact">
-      <div><dt>Level</dt><dd>${s0.level} → ${sum.level}</dd></div>
-      <div><dt>Hit points</dt><dd>${s0.hp} → ${sum.hp} (+${(sum.hp ?? 0) - (s0.hp ?? 0)})</dd></div>
-      <div><dt>Hit dice</dt><dd>${fmtDice(s0)} → ${fmtDice(sum)}</dd></div>
-      ${sum.pb !== s0.pb ? `<div><dt>Proficiency</dt><dd>${signed(s0.pb)} → ${signed(sum.pb)}</dd></div>` : ""}
-      ${slots1.join() !== slots0 ? `<div><dt>Spell slots</dt><dd>${slots1.map((n, i) => `${n} ${ordinal(i + 1)}`).join(", ") || "none"}</dd></div>` : ""}
-    </dl>
-    <h2>New features</h2>
-    ${newFeatures.length ? `<ul class="feature-list">${newFeatures.map(f => `<li><strong>${esc(f.name)}</strong> <span class="muted">${esc(f.source)}</span></li>`).join("")}</ul>` : `<p class="muted">No new features at this level.</p>`}
-    ${resChanges.length ? `<h2>Uses</h2><ul class="feature-list">${resChanges.map(r => `<li><strong>${esc(r.name)}</strong> <span class="muted">${res0.get(r.id)?.max ?? 0} → ${r.max}</span></li>`).join("")}</ul>` : ""}
-    <div class="create-row">
-      <button type="button" class="btn btn-primary" data-apply ${needsOk && !draft.build.overrides ? "disabled" : ""}>Apply level ${sum.level}</button>
-      ${needsOk && !draft.build.overrides ? `<p class="muted">${open.length ? "Finish the choices, or tick the DM approval box." : "Tick the DM approval box to continue."}</p>` : ""}
-    </div>`;
-}
-
-function applyLevelUp() {
-  const res = resolve(draft.build, pack);
-  const sum = summarize(draft.build, pack, res);
-  if (newWarnings(res).length && !draft.build.overrides) return;
-  const snapshot = snapshotFor(res, pack);
-  const f = structuredClone(lu.file);
-  f.format = 2;
-  f.build = normalizeBuild({ ...draft.build, overrides: !!(lu.file.build?.overrides || draft.build.overrides) });
-  f.snapshot = snapshot;
-  if (pack.meta) f.pack = { version: pack.meta.version, built: pack.meta.built };
-  f.updated = new Date().toISOString();
-  // Gaining a level adds its hit points to your current total as well as your maximum.
-  const gain = (sum.hp ?? 0) - (lu.sum0.hp ?? 0);
-  f.play ??= {};
-  f.play.hp ??= { current: lu.sum0.hp ?? 0, temp: 0 };
-  f.play.hp.current = Math.max(0, Math.min(sum.hp ?? 0, f.play.hp.current + gain));
-  clearLevelUp();
-  window.dispatchEvent(new CustomEvent("levelled-up", { detail: f }));
 }
