@@ -31,7 +31,7 @@
 [data-skin="retro"] *, [data-skin="retro"] *::before, [data-skin="retro"] *::after {
   border-radius: 0 !important; box-shadow: none !important; transition: none !important; animation: none !important;
 }
-[data-skin="retro"] .pip, [data-skin="retro"] .dot, [data-skin="retro"] .step-num { border-radius: 50% !important; }
+[data-skin="retro"] .pip, [data-skin="retro"] .step-num { border-radius: 50% !important; }
 
 /* ---------- page frame ---------- */
 [data-skin="retro"] { background: #1c140e url("../assets/retro/stone.png"); }
@@ -246,6 +246,74 @@
   [data-skin="retro"] .sheet-grid { grid-template-columns: 1fr; }
   [data-skin="retro"] .combat-strip { grid-template-columns: repeat(2, 1fr); grid-template-areas: "hp hp"; }
 }
+}
+
+@media screen {
+/* ---------- stat boxes: maroon title strip over a white inset "well" ---------- */
+[data-skin="retro"] .stat-box { padding: 0 6px 6px; gap: 4px; background: #f7efd9; border: 1px solid var(--box-border); }
+[data-skin="retro"] .stat-box > .label, [data-skin="retro"] .stat-box > label {
+  display: block; margin: 0 -6px 2px; padding: 2px 6px;
+  background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
+  font: bold 11px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000; text-align: center;
+}
+[data-skin="retro"] .stat-box > strong {
+  display: inline-block; justify-self: center; min-width: 3.2em; margin: 2px auto 0; padding: 2px 8px;
+  background: #fff; border: 2px inset #d4d0c8; font: bold 22px/1.15 var(--serif); color: #000;
+}
+[data-skin="retro"] .stat-box > strong.small-value { font-size: 16px; padding: 4px 8px; }
+[data-skin="retro"] .stat-box small { font: 11px/1.35 var(--sans); color: var(--muted); }
+[data-skin="retro"] .ac-box { border: 2px solid var(--box-border); }
+[data-skin="retro"] .ac-box > label { margin-bottom: 4px; }
+[data-skin="retro"] .tracker-box .stepper strong { min-width: 2em; padding: 0 4px; background: #fff; border: 2px inset #d4d0c8; font: bold 16px/1.3 var(--serif); }
+[data-skin="retro"] .tracker-box .step-btn { width: 20px; height: 20px; padding: 0; font: bold 12px/1 var(--sans); }
+[data-skin="retro"] .tracker-box .stepper .muted { font-size: 11px; }
+[data-skin="retro"] .death { font: 11px var(--sans); }
+/* HP box gets the same title strip; its inner "Hit points" label is dropped as redundant */
+[data-skin="retro"] .hp-box { padding: 0 8px 8px; }
+[data-skin="retro"] .hp-box::before {
+  content: "Hit points"; display: block; margin: 0 -8px 6px; padding: 2px 6px;
+  background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
+  font: bold 11px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000; text-align: center;
+}
+[data-skin="retro"] .hp-current > .label { display: none; }
+[data-skin="retro"] .hp-temp > .label { font-size: 11px; }
+
+/* In layout mode the Hide/Show button sits inside the title strip, clear of the numbers */
+[data-skin="retro"] .layout-mode .stat-box, [data-skin="retro"] .layout-mode .hp-box { padding-top: 0; }
+[data-skin="retro"] .stat-box > .hide-btn, [data-skin="retro"] .hp-box > .hide-btn {
+  top: 1px; right: 2px; padding: 0 5px; font: bold 10px/15px var(--sans); border-width: 1px;
+}
+[data-skin="retro"] .layout-mode .stat-box > .label, [data-skin="retro"] .layout-mode .stat-box > label { padding-right: 44px; padding-left: 44px; }
+
+/* ---------- ability blocks: title bar with the modifier, striped rows ---------- */
+[data-skin="retro"] .ability-block { padding: 0 0 2px; background: #fffaf0; }
+[data-skin="retro"] .ability-top {
+  margin: 0 0 2px; padding: 3px 6px; border-bottom: 1px solid #000;
+  background: linear-gradient(var(--bar-top), var(--bar-bottom));
+}
+[data-skin="retro"] .ability-top h3 { font: bold 13px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000; }
+[data-skin="retro"] .ability-mod { font: bold 18px/1 var(--serif); color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
+[data-skin="retro"] .ability-score { font: bold 11px/1.4 var(--sans); color: #000; background: #fff; border: 2px inset #d4d0c8; padding: 0 5px; }
+[data-skin="retro"] .ability-block ul { margin: 0; }
+[data-skin="retro"] .ability-block li { padding: 1px 6px; border-bottom: 1px dotted #c8b58a; color: #6a5a46; }
+[data-skin="retro"] .ability-block li:nth-child(even) { background: #f3ead2; }
+[data-skin="retro"] .ability-block li:last-child { border-bottom: 0; }
+[data-skin="retro"] .ability-block li.prof { color: #000; font-weight: bold; }
+[data-skin="retro"] .ability-block .val { font-weight: bold; }
+[data-skin="retro"] .layout-mode .ability-top { padding-right: 56px; }
+[data-skin="retro"] .ability-block > .hide-btn { top: 2px; right: 4px; padding: 1px 6px; }
+
+/* proficiency marker: a small square checkbox, filled when proficient, double-ringed for expertise */
+[data-skin="retro"] .dot { width: 9px; height: 9px; border: 1px solid #6b5333; background: #fff; box-shadow: inset 1px 1px 0 #c8bea4 !important; }
+[data-skin="retro"] li.prof .dot { background: #8b0000; border-color: #4d0606; box-shadow: none !important; }
+[data-skin="retro"] li.expert .dot { outline: 1px solid #8b0000; outline-offset: 1px; }
+
+/* advantage tags look like the era's little "NEW!" badges */
+[data-skin="retro"] .adv {
+  margin-left: 4px; padding: 0 3px; border: 1px solid #600; background: #c00; color: #fff;
+  font: bold 9px/1.4 var(--sans); letter-spacing: 0; vertical-align: 1px;
+}
+[data-skin="retro"] .adv.adv-cond { background: #ffe680; color: #3a2a00; border: 1px solid #8a6b12; }
 }
 
 /* Pieces of the old-web footer only appear in the 2002 skin. */
