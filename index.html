@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sick 2024 DnD Character Builder</title>
-  <link rel="icon" type="image/gif" id="favicon" href="assets/retro/dragon.gif?v=2026-10-12d">
+  <link rel="icon" type="image/gif" id="favicon" href="assets/retro/dragon.gif?v=2026-10-12e">
   <script>
     // Tab icon: the dragon GIF. Until assets/retro/dragon.gif is in the repo, use the archived original.
     (function () {
@@ -16,14 +16,29 @@
   <link rel="preload" href="assets/fonts/Bookinsanity.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/Scaly-Sans.woff2" as="font" type="font/woff2" crossorigin>
   <!-- Bump ?v= on every release so phones and browsers fetch the new files instead of cached ones. -->
-  <link rel="stylesheet" href="css/style.css?v=2026-10-12d">
-  <link rel="stylesheet" href="css/theme.css?v=2026-10-12d">
-  <link rel="stylesheet" href="css/retro.css?v=2026-10-12d">
+  <link rel="stylesheet" href="css/style.css?v=2026-10-12e">
+  <link rel="stylesheet" href="css/theme.css?v=2026-10-12e">
+  <link rel="stylesheet" href="css/retro.css?v=2026-10-12e">
   <script>
     // Apply the saved site style before the page paints, so there's no flash of the other skin.
     try { document.documentElement.dataset.skin = localStorage.getItem("character-builder:skin") === "retro" ? "retro" : "modern"; } catch (e) {}
   </script>
-  <script type="module" src="js/app.js?v=2026-10-12d"></script>
+  <!-- Every script module gets the same version as the stylesheets, so a phone can't mix new
+       styles with an old cached sheet.js. Bump all the ?v= values together. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./js/app.js": "./js/app.js?v=2026-10-12e",
+      "./js/engine.js": "./js/engine.js?v=2026-10-12e",
+      "./js/render.js": "./js/render.js?v=2026-10-12e",
+      "./js/rules.js": "./js/rules.js?v=2026-10-12e",
+      "./js/sheet.js": "./js/sheet.js?v=2026-10-12e",
+      "./js/store.js": "./js/store.js?v=2026-10-12e",
+      "./js/wizard.js": "./js/wizard.js?v=2026-10-12e"
+    }
+  }
+  </script>
+  <script type="module" src="js/app.js?v=2026-10-12e"></script>
 </head>
 <body>
   <header class="topbar">
@@ -55,6 +70,7 @@
   <footer class="site-foot">
     <p>This builder is a fan-made work and is not affiliated with Wizards of the Coast. Dungeons &amp; Dragons, D&amp;D, Wizards of the Coast and their logos are trademarks of Wizards of the Coast in the USA and other countries.</p>
     <p>Fonts: remakes from <a href="https://github.com/naturalcrit/homebrewery" target="_blank" rel="noopener">The Homebrewery</a>. <a href="assets/fonts/LICENSE.md" target="_blank" rel="noopener">Font credits</a></p>
+    <p class="site-version">Site version v=2026-10-12e</p>
     <p class="modern-only skin-links">Site style: <button type="button" data-skin-set="modern">Modern</button> or <button type="button" data-skin-set="retro">2002</button></p>
     <div class="retro-only">
       <p>Best viewed at 1024&times;768 in any browser. Last updated: <span id="last-updated"></span></p>
