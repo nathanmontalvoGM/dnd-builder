@@ -231,9 +231,78 @@
 [data-skin="retro"] .home-card strong { text-decoration: underline; }
 [data-skin="retro"] .home-card:hover { background: #f6e7b4; }
 
-[data-skin="retro"] .wizard { padding: 10px 0 20px; max-width: none; }
-[data-skin="retro"] .steps button { font: 12px var(--sans); }
-[data-skin="retro"] .steps .step-current { background: #f6e7b4; font-weight: bold; }
+[data-skin="retro"] .wizard { padding: 10px 0 20px; max-width: none; gap: 14px; }
+
+/* step list: a title-barred menu box, numbered rows with dotted rules */
+[data-skin="retro"] .steps { background: var(--surface); border: 1px solid var(--box-border); top: 8px; }
+[data-skin="retro"] .steps::before {
+  content: "Steps"; display: block; padding: 3px 8px;
+  background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
+  font: bold 13px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000;
+}
+[data-skin="retro"] .steps ol { gap: 0; }
+[data-skin="retro"] .steps li + li { border-top: 1px dotted #c8b58a; }
+[data-skin="retro"] .steps button {
+  grid-template-columns: 20px 1fr; column-gap: 6px; padding: 4px 6px; border-radius: 0;
+  font: 12px/1.4 var(--sans); color: #8b0000; text-decoration: none;
+}
+[data-skin="retro"] .steps .step-title { text-decoration: underline; }
+[data-skin="retro"] .steps .step-current .step-title { text-decoration: none; }
+[data-skin="retro"] .steps button:hover { background: #f6e7b4; color: #cc0000; }
+[data-skin="retro"] .step-num {
+  width: 18px; height: 18px; border-radius: 0 !important; font: bold 11px/1 var(--sans);
+  background: linear-gradient(#fffef9, #e8dfc6); border: 1px solid #8a7a5a; color: #3a2a1a;
+}
+[data-skin="retro"] .steps .step-current { background: #f6e7b4; color: #000; font-weight: bold; }
+[data-skin="retro"] .steps .step-current .step-num { background: #8b0000; border-color: #000; color: #fff; }
+[data-skin="retro"] .steps .step-done .step-num { background: #dfe9c8; border-color: #4f6a2a; color: #2f4a12; }
+[data-skin="retro"] .steps .step-open .step-num { background: #fff3b0; border-color: #b8962e; color: #6b4a00; }
+[data-skin="retro"] .step-flag { grid-column: 2; font: 10px var(--sans); color: #6b4a00; text-decoration: none; }
+
+/* intro note: a pale yellow "Tip" box instead of the pinned scroll */
+[data-skin="retro"] .step-intro {
+  background: #fffbe0; border: 1px dashed #b8962e; padding: 6px 10px; max-width: none; margin-bottom: 14px;
+}
+[data-skin="retro"] .step-intro::before { content: "Tip: "; position: static; border: 0; height: auto; font-weight: bold; color: #8b0000; }
+[data-skin="retro"] .step-intro::after { content: none; }
+
+/* character-so-far box: maroon title bar, no notched ends */
+[data-skin="retro"] .live-summary { padding: 0 8px 8px; margin: 0; top: 8px; }
+[data-skin="retro"] .live-summary::before, [data-skin="retro"] .live-summary::after { content: none; }
+[data-skin="retro"] .live-summary > h2 {
+  margin: 0 -8px 4px; padding: 3px 8px;
+  background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
+  font: bold 13px/1.4 var(--sans); font-variant: normal; color: #fff; text-shadow: 1px 1px 0 #000;
+}
+[data-skin="retro"] .live-summary > p { margin: 0 0 8px; font-size: 11px; }
+[data-skin="retro"] .scores { gap: 4px; margin-bottom: 8px; }
+[data-skin="retro"] .scores div { padding: 0 0 3px; border: 1px solid var(--box-border); border-radius: 0; background: #fffaf0; }
+[data-skin="retro"] .scores dt { margin-bottom: 2px; padding: 1px 0; background: #e8d7a8; border-bottom: 1px solid var(--box-border); font: bold 10px var(--sans); color: #3a2a1a; text-transform: uppercase; }
+[data-skin="retro"] .scores strong { font: bold 16px/1.1 var(--serif); }
+[data-skin="retro"] .scores span { font-size: 11px; }
+[data-skin="retro"] .vitals { gap: 0; }
+[data-skin="retro"] .vitals div { padding: 2px 4px; border-bottom: 1px dotted #c8b58a; font-size: 12px; }
+[data-skin="retro"] .vitals div:nth-child(even) { background: #f3ead2; }
+[data-skin="retro"] .vitals dt { font-size: 11px; }
+
+/* class, species and background cards: raised boxes that turn yellow on hover */
+[data-skin="retro"] .pick-grid { gap: 8px; }
+[data-skin="retro"] .pick-card, [data-skin="retro"] .option-card {
+  border: 2px outset #e3d8bb; border-radius: 0; box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.18); padding: 8px 10px;
+}
+[data-skin="retro"] .pick-card:hover, [data-skin="retro"] .option-card:hover { background: #fff3c4; border-color: #e3d8bb; }
+[data-skin="retro"] .pick-card .pick-name, [data-skin="retro"] .option-card .option-name { text-decoration: underline; }
+[data-skin="retro"] .pick-card.selected, [data-skin="retro"] .option-card.selected { border: 2px inset #8b0000; box-shadow: none; }
+[data-skin="retro"] .pick-card.selected .pick-name::before, [data-skin="retro"] .option-card.selected .option-name::before { content: "\2714  "; color: #2f6a12; }
+
+/* each choice gets its own little box with a tan header strip */
+[data-skin="retro"] .decisions { gap: 10px; }
+[data-skin="retro"] .decision { border: 1px solid var(--box-border); border-left-width: 1px; padding: 0 8px 8px; background: var(--surface); }
+[data-skin="retro"] .decision.is-complete { border-color: var(--box-border); }
+[data-skin="retro"] .decision-head { margin: 0 -8px 2px; padding: 3px 8px; background: #fff3b0; border-bottom: 1px solid var(--box-border); }
+[data-skin="retro"] .decision.is-complete > .decision-head { background: #e8d7a8; }
+[data-skin="retro"] .decision-source { font-size: 11px; margin: 2px 0 6px; }
+[data-skin="retro"] .step-nav { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--box-border); }
 
 [data-skin="retro"] .sheet { padding: 6px 0 20px; max-width: none; }
 [data-skin="retro"] .sheet-head { border-bottom: 1px solid var(--box-border); padding-bottom: 8px; margin-bottom: 10px; }
