@@ -460,6 +460,18 @@ function applyFeat(ctx, id, params, scope, into, source) {
 function queryOptions(ctx, q, scope) {
   const { pack, out } = ctx;
   const val = k => resolveRef(q[k], scope);
+  if (q.pool === "skills") {
+    // proficient: true/false and expertise: true/false filter on what the character has so far,
+    // e.g. Skill Expert's Expertise pick lists only skills you're proficient in without Expertise.
+    const prof = new Set(out.proficiencies.skill.map(x => x.value));
+    const exp = new Set(out.expertise.map(x => x.value));
+    return {
+      options: Object.keys(SKILLS)
+        .filter(n => q.proficient == null || prof.has(n) === !!q.proficient)
+        .filter(n => q.expertise == null || exp.has(n) === !!q.expertise)
+        .map(n => ({ value: n, label: n })),
+    };
+  }
   if (q.pool === "spells") {
     const lists = asArray(val("lists")).filter(Boolean);
     if (q.lists && !lists.length) return { options: [], waiting: "Choose a spell list first." };
