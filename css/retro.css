@@ -118,7 +118,6 @@
 [data-skin="retro"] .entry-head h1, [data-skin="retro"] .step-body > h1 {
   font: normal 30px/1.2 var(--title); color: var(--heading); text-transform: none; letter-spacing: 0; text-shadow: 1px 1px 0 #e8d7a8;
 }
-[data-skin="retro"] .sheet-id h1 { font-size: 36px; }
 [data-skin="retro"] .home h1::after, [data-skin="retro"] .empty h1::after {
   width: 100%; height: 0; margin: 6px 0 0; clip-path: none; background: none; border-top: 1px solid var(--box-border); border-bottom: 1px solid #fff;
 }
@@ -321,7 +320,51 @@
 [data-skin="retro"] .step-nav { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--box-border); }
 
 [data-skin="retro"] .sheet { padding: 6px 0 20px; max-width: none; }
-[data-skin="retro"] .sheet-head { border-bottom: 1px solid var(--box-border); padding-bottom: 8px; margin-bottom: 10px; }
+/* sheet header: a framed nameplate. Name and a round level seal on top, labelled fields like a
+   paper character sheet, then a toolbar strip holding the tools and the rest/save buttons. */
+[data-skin="retro"] .sheet-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name seal" "fields fields" "tools actions";
+  align-items: center; gap: 0; margin-bottom: 12px; padding: 0;
+  background: linear-gradient(rgba(255, 250, 235, 0.85), rgba(239, 228, 198, 0.9)), url("../assets/retro/parchment.png");
+  border: 3px double var(--box-border); outline: 1px solid #000; outline-offset: -6px;
+}
+[data-skin="retro"] .sheet-id { display: contents; }
+[data-skin="retro"] .sheet-id h1 {
+  grid-area: name; margin: 0; padding: 14px 18px 6px; font-size: 52px; line-height: 1;
+  color: #7a0e0e; text-shadow: 2px 2px 0 #e8d7a8, 3px 3px 0 rgba(0, 0, 0, 0.25); overflow-wrap: anywhere;
+}
+[data-skin="retro"] .sheet-id .id-line { display: none; }
+[data-skin="retro"] .id-level {
+  grid-area: seal; justify-self: end; display: grid; place-content: center; justify-items: center; width: 74px; height: 74px; margin: 12px 18px 0 10px;
+  border-radius: 50% !important; background: radial-gradient(circle at 35% 30%, #c0392b, #7a0e0e 60%, #3d0404);
+  border: 3px solid #b8962e; outline: 1px solid #000; color: #f0cf6a; text-shadow: 1px 1px 0 #000;
+}
+[data-skin="retro"] .id-level span { font: 12px/1 var(--label); letter-spacing: 1px; text-transform: uppercase; }
+[data-skin="retro"] .id-level strong { font: 34px/1 var(--title); color: #fff3c4; }
+[data-skin="retro"] .id-fields {
+  grid-area: fields; display: grid; grid-template-columns: minmax(14rem, 2.4fr) repeat(3, minmax(7rem, 1fr));
+  margin: 4px 18px 12px; border: 1px solid var(--box-border); background: #fffaf0;
+}
+[data-skin="retro"] .id-fields > div { padding: 4px 10px 5px; border-left: 1px solid var(--box-border); min-width: 0; }
+[data-skin="retro"] .id-fields > div:first-child { border-left: 0; }
+[data-skin="retro"] .id-fields dd { margin: 0; font: 17px/1.3 var(--body); color: #1a0a04; overflow-wrap: anywhere; }
+[data-skin="retro"] .id-fields dt {
+  order: 2; margin-top: 3px; padding-top: 2px; border-top: 1px solid #c8b58a;
+  font: 11px/1.2 var(--label); color: #7a6a52; text-transform: uppercase; letter-spacing: 0.5px;
+}
+[data-skin="retro"] .id-fields > div { display: flex; flex-direction: column; }
+[data-skin="retro"] .sheet-tools, [data-skin="retro"] .sheet-actions {
+  margin: 0; padding: 6px 12px; align-self: stretch; align-items: center;
+  background: linear-gradient(#3a2a1d, #22170f); border-top: 2px solid #000;
+}
+[data-skin="retro"] .sheet-tools { grid-area: tools; gap: 2px 4px; }
+[data-skin="retro"] .sheet-actions { grid-area: actions; justify-content: flex-end; }
+[data-skin="retro"] .sheet-tools .tool-btn { color: #f0cf6a; font-size: 13px; padding: 3px 8px; }
+[data-skin="retro"] .sheet-tools .tool-btn + .tool-btn { border-left: 1px solid #6b5333; }
+[data-skin="retro"] .sheet-tools .tool-btn:hover:not(:disabled) { color: #fff; }
+[data-skin="retro"] .sheet-tools .tool-btn svg { color: #b8962e; }
+[data-skin="retro"] .sheet-actions .btn-quiet { color: #f0cf6a; }
+[data-skin="retro"] .layout-mode .sheet-actions { grid-column: 1 / -1; }
 [data-skin="retro"] .combat-strip { gap: 6px; grid-template-columns: repeat(5, minmax(6.5rem, 1fr)); grid-template-areas: "hp hp hp hp hp"; }
 [data-skin="retro"] .sheet-grid { gap: 10px; }
 [data-skin="retro"] .main-col, [data-skin="retro"] .side-col, [data-skin="retro"] .abilities-col { gap: 10px; }
@@ -346,6 +389,18 @@
 
   [data-skin="retro"] .sheet-grid { grid-template-columns: 1fr; }
   [data-skin="retro"] .combat-strip { grid-template-columns: repeat(2, 1fr); grid-template-areas: "hp hp"; }
+  [data-skin="retro"] .sheet-id h1 { font-size: 36px; padding: 12px 12px 4px; }
+  [data-skin="retro"] .id-level { width: 58px; height: 58px; margin: 10px 12px 0 6px; }
+  [data-skin="retro"] .id-level strong { font-size: 26px; }
+  [data-skin="retro"] .id-fields { grid-template-columns: 1fr 1fr; margin: 4px 12px 10px; }
+  [data-skin="retro"] .id-fields > .id-class { grid-column: 1 / -1; }
+  [data-skin="retro"] .id-fields > div:nth-child(n+2) { border-top: 1px solid var(--box-border); }
+  [data-skin="retro"] .id-fields > div:nth-child(2) { border-left: 0; }
+}
+@media (max-width: 1000px) {
+  /* tools and rest/save buttons on separate rows of the strip */
+  [data-skin="retro"] .sheet-head { grid-template-areas: "name seal" "fields fields" "tools tools" "actions actions"; }
+  [data-skin="retro"] .sheet-actions { border-top: 1px solid #000; justify-content: flex-start; }
 }
 }
 

@@ -296,7 +296,14 @@ function render() {
     <header class="sheet-head">
       <div class="sheet-id">
         <h1>${esc(f.details?.name || "Unnamed character")}</h1>
-        <p>${esc([`Level ${s.level} ${classText}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
+        <p class="id-line">${esc([`Level ${s.level} ${classText}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
+        <div class="id-level" aria-hidden="true"><span>Level</span><strong>${s.level}</strong></div>
+        <dl class="id-fields">
+          <div class="id-class"><dt>Class</dt><dd>${esc(classText)}</dd></div>
+          ${species?.name ? `<div><dt>Species</dt><dd>${esc(species.name)}</dd></div>` : ""}
+          ${bg?.name ? `<div><dt>Background</dt><dd>${esc(bg.name)}</dd></div>` : ""}
+          ${f.details?.alignment ? `<div><dt>Alignment</dt><dd>${esc(f.details.alignment)}</dd></div>` : ""}
+        </dl>
         ${editing() ? "" : `<div class="sheet-tools" role="toolbar" aria-label="Character tools">
           <button type="button" class="tool-btn" data-levelup ${s.level >= 20 ? "disabled" : ""}>${ICONS.levelup}Level up</button>
           <button type="button" class="tool-btn" data-edit-build>${ICONS.edit}Edit in builder</button>
