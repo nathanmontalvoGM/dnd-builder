@@ -49,14 +49,16 @@
 
 /* banner */
 [data-skin="retro"] .brand {
-  grid-area: banner; display: block; padding: 18px 20px 14px; text-decoration: none;
+  grid-area: banner; display: flex; align-items: center; justify-content: center; gap: 18px;
+  padding: 12px 16px; text-decoration: none; text-align: center;
   background: linear-gradient(rgba(60, 8, 8, 0.55), rgba(20, 4, 4, 0.85)), url("../assets/retro/stone.png");
   border-bottom: 3px double #b8962e;
-  font: bold 34px/1 var(--title); letter-spacing: 1px; text-transform: none;
+  font: bold 34px/1.1 var(--title); letter-spacing: 1px; text-transform: none;
   color: #f0cf6a; text-shadow: 2px 2px 0 #000, 0 0 6px #6b0000;
 }
-[data-skin="retro"] .brand::after {
-  content: "Your source for D\26 D 2024 characters, spells and lore";
+[data-skin="retro"] .brand-gif { display: block; height: 72px; width: auto; image-rendering: pixelated; }
+[data-skin="retro"] .brand-gif.flip { transform: scaleX(-1); } /* the right-hand dragon faces the title */
+[data-skin="retro"] .brand-tag {
   display: block; margin-top: 6px; font: italic 12px var(--serif); letter-spacing: 0; color: #e6d7b0; text-shadow: 1px 1px 0 #000;
 }
 
@@ -240,7 +242,8 @@
     background: url("../assets/retro/parchment.png");
   }
   [data-skin="retro"] .topnav, [data-skin="retro"] .pack-status, [data-skin="retro"] .skin-pick { background: var(--side); margin: 0; padding: 6px 8px; }
-  [data-skin="retro"] .brand { font-size: 24px; }
+  [data-skin="retro"] .brand { font-size: 20px; gap: 8px; }
+  [data-skin="retro"] .brand-gif { height: 44px; }
   [data-skin="retro"] .wizard { grid-template-columns: 1fr; }
   [data-skin="retro"] .steps, [data-skin="retro"] .live-summary, [data-skin="retro"] .step-body { grid-column: 1; grid-row: auto; }
   [data-skin="retro"] .sheet-grid { grid-template-columns: 1fr; }
@@ -318,6 +321,7 @@
 
 /* Pieces of the old-web footer only appear in the 2002 skin. */
 .retro-only { display: none; }
+.brand-gif, .brand-tag { display: none; }
 /* The header dropdown lives in the 2002 sidebar; the modern skin uses the footer links instead. */
 .skin-pick { display: none; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--muted); }
 [data-skin="retro"] .modern-only { display: none; }
