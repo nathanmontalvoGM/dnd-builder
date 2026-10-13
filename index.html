@@ -4,17 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sick 2024 DnD Character Builder</title>
+  <link rel="icon" type="image/gif" id="favicon" href="assets/retro/dragon.gif?v=2026-10-12c">
+  <script>
+    // Tab icon: the dragon GIF. Until assets/retro/dragon.gif is in the repo, use the archived original.
+    (function () {
+      var link = document.getElementById("favicon"), probe = new Image();
+      probe.onerror = function () { link.href = "https://web.archive.org/web/20090831164908im_/http://geocities.com/bjartman2000/dragon.gif"; };
+      probe.src = link.href;
+    })();
+  </script>
   <link rel="preload" href="assets/fonts/Bookinsanity.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/Scaly-Sans.woff2" as="font" type="font/woff2" crossorigin>
   <!-- Bump ?v= on every release so phones and browsers fetch the new files instead of cached ones. -->
-  <link rel="stylesheet" href="css/style.css?v=2026-10-12b">
-  <link rel="stylesheet" href="css/theme.css?v=2026-10-12b">
-  <link rel="stylesheet" href="css/retro.css?v=2026-10-12b">
+  <link rel="stylesheet" href="css/style.css?v=2026-10-12c">
+  <link rel="stylesheet" href="css/theme.css?v=2026-10-12c">
+  <link rel="stylesheet" href="css/retro.css?v=2026-10-12c">
   <script>
     // Apply the saved site style before the page paints, so there's no flash of the other skin.
     try { document.documentElement.dataset.skin = localStorage.getItem("character-builder:skin") === "retro" ? "retro" : "modern"; } catch (e) {}
   </script>
-  <script type="module" src="js/app.js?v=2026-10-12b"></script>
+  <script type="module" src="js/app.js?v=2026-10-12c"></script>
 </head>
 <body>
   <header class="topbar">
