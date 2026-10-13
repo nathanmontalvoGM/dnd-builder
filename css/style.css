@@ -531,6 +531,9 @@ button.home-card { font: inherit; text-align: left; cursor: pointer; }
 .hp-adjust .btn { padding: 0.45em 0.7em; }
 .hp-bar { height: 5px; border-radius: 99px; background: var(--rule); overflow: hidden; }
 .hp-bar span { display: block; height: 100%; background: var(--verdigris); }
+/* Bloodied (half HP or less) turns the bar yellow; a quarter or less turns it red */
+.hp-bar[data-state="bloodied"] span { background: #c9a227; }
+.hp-bar[data-state="low"] span { background: var(--danger); }
 
 .pips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; vertical-align: middle; }
 .pip {

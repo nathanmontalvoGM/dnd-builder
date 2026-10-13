@@ -537,67 +537,11 @@
   [data-skin="retro"] .features-panel .feature-rows > li:last-child { border-bottom: 0; }
 }
 
-/* ---------- shaped stats and pixel icons ----------
+/* ---------- shaped stats ----------
    Key numbers get their own shapes instead of the standard box: Armor class on a shield, hit
    points in a heart over a potion-vial bar, the four quick numbers on dark plaques, and each
-   ability's modifier on a crest. 16x16 pixel icons label stats, panels, rests and class cards.
-   Frames are in assets/retro/frames, icons in assets/retro/icons. */
+   ability's modifier on a crest. Frames are in assets/retro/frames. */
 @media screen {
-  /* icon helper: every icon is a 16x16 pixel drawing shown crisp */
-  [data-skin="retro"] [data-hz] > .label::before,
-  [data-skin="retro"] [data-hz] > h2::before, [data-skin="retro"] [data-hz] > .panel-head > h2::before,
-  [data-skin="retro"] .rest-group .btn::before {
-    background: var(--icon) center / 16px 16px no-repeat; image-rendering: pixelated;
-  }
-  [data-skin="retro"] [data-hz] > .label::before,
-  [data-skin="retro"] [data-hz] > h2::before, [data-skin="retro"] [data-hz] > .panel-head > h2::before,
-  [data-skin="retro"] .rest-group .btn::before {
-    content: ""; display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px;
-  }
-  [data-skin="retro"] [data-hz="stat:ac"] { --icon: url("../assets/retro/icons/shield.svg"); }
-  [data-skin="retro"] [data-hz="stat:initiative"] { --icon: url("../assets/retro/icons/bolt.svg"); }
-  [data-skin="retro"] [data-hz="stat:speed"] { --icon: url("../assets/retro/icons/boot.svg"); }
-  [data-skin="retro"] [data-hz="stat:proficiency"] { --icon: url("../assets/retro/icons/star.svg"); }
-  [data-skin="retro"] [data-hz="stat:perception"] { --icon: url("../assets/retro/icons/eye.svg"); }
-  [data-skin="retro"] [data-hz="stat:size"] { --icon: url("../assets/retro/icons/person.svg"); }
-  [data-skin="retro"] [data-hz="stat:hitdice"] { --icon: url("../assets/retro/icons/die.svg"); }
-  [data-skin="retro"] [data-hz="stat:death"] { --icon: url("../assets/retro/icons/skull.svg"); }
-  [data-skin="retro"] [data-hz="stat:inspiration"] { --icon: url("../assets/retro/icons/sparkle.svg"); }
-  [data-skin="retro"] [data-hz="stat:exhaustion"] { --icon: url("../assets/retro/icons/zzz.svg"); }
-  [data-skin="retro"] [data-hz="stat:armor"] { --icon: url("../assets/retro/icons/shield.svg"); }
-  [data-skin="retro"] [data-hz="panel:attacks"] { --icon: url("../assets/retro/icons/sword.svg"); }
-  [data-skin="retro"] [data-hz="panel:glance"] { --icon: url("../assets/retro/icons/eye.svg"); }
-  [data-skin="retro"] [data-hz="panel:yournotes"], [data-skin="retro"] [data-hz="panel:notes"] { --icon: url("../assets/retro/icons/quill.svg"); }
-  [data-skin="retro"] [data-hz="panel:resources"] { --icon: url("../assets/retro/icons/hourglass.svg"); }
-  [data-skin="retro"] [data-hz="panel:training"] { --icon: url("../assets/retro/icons/star.svg"); }
-  [data-skin="retro"] [data-hz="panel:defenses"] { --icon: url("../assets/retro/icons/shield.svg"); }
-  [data-skin="retro"] [data-hz="panel:equipment"] { --icon: url("../assets/retro/icons/bag.svg"); }
-  [data-skin="retro"] [data-hz="panel:features"] { --icon: url("../assets/retro/icons/scroll.svg"); }
-  [data-skin="retro"] [data-hz="panel:spells"] { --icon: url("../assets/retro/icons/book.svg"); }
-
-  /* rest buttons: pixel hourglass and moon instead of the line icons */
-  [data-skin="retro"] .rest-group .btn svg { display: none; }
-  [data-skin="retro"] .rest-group [data-rest="short"]::before { --icon: url("../assets/retro/icons/hourglass.svg"); }
-  [data-skin="retro"] .rest-group [data-rest="long"]::before { --icon: url("../assets/retro/icons/moon.svg"); }
-
-  /* class cards in the builder and in Level up */
-  [data-skin="retro"] .pick-card:has(input[data-pick="class"], input[data-lu-class]) {
-    padding-left: 54px; background-position: 10px 10px; background-size: 32px 32px; background-repeat: no-repeat; image-rendering: pixelated;
-    min-height: 56px;
-  }
-  [data-skin="retro"] .pick-card:has(input[value="barbarian"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/barbarian.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="bard"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/bard.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="cleric"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/cleric.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="druid"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/druid.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="fighter"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/fighter.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="monk"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/monk.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="paladin"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/paladin.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="ranger"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/ranger.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="rogue"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/rogue.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="sorcerer"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/sorcerer.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="warlock"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/warlock.svg"); }
-  [data-skin="retro"] .pick-card:has(input[value="wizard"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/wizard.svg"); }
-
   /* Armor class: a heater shield; the label sits on its maroon top band */
   [data-skin="retro"] [data-hz="stat:ac"] {
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 0 4px 6px;
@@ -654,7 +598,9 @@
     grid-area: bar; height: 16px; border: 2px solid #1a0404; border-radius: 9px !important; overflow: hidden;
     background: linear-gradient(#2a0a0a, #4a1414); box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.6) !important; position: relative;
   }
-  [data-skin="retro"] .hp-box .hp-bar span { background: linear-gradient(#ff6a5a, #c0182a 45%, #6a0010); border-radius: 0 !important; }
+  [data-skin="retro"] .hp-box .hp-bar span { background: linear-gradient(#8ef27a, #2e9e22 45%, #145a0c); border-radius: 0 !important; }
+  [data-skin="retro"] .hp-box .hp-bar[data-state="bloodied"] span { background: linear-gradient(#fff08a, #e0b420 45%, #8a6400); }
+  [data-skin="retro"] .hp-box .hp-bar[data-state="low"] span { background: linear-gradient(#ff6a5a, #c0182a 45%, #6a0010); }
   [data-skin="retro"] .hp-box .hp-bar::after {
     content: ""; position: absolute; left: 6px; right: 6px; top: 2px; height: 4px; border-radius: 3px !important; background: rgba(255, 255, 255, 0.35);
   }
@@ -691,4 +637,27 @@
   [data-skin="retro"] .layout-mode [data-hz="stat:ac"] > label { padding: 2px 0 0; }
   [data-skin="retro"] .layout-mode :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) > .label { padding: 0; }
   [data-skin="retro"] .layout-mode :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) { padding-top: 22px; }
+}
+
+/* combat strip: hit points, the AC shield and the four plaques (2x2) share the top two rows, the
+   trackers fill the row below */
+@media screen {
+  [data-skin="retro"] .combat-strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-areas: "hp hp hp ac p1 p2" "hp hp hp ac p3 p4";
+  }
+  [data-skin="retro"] [data-hz="stat:ac"] { grid-area: ac; align-self: center; }
+  [data-skin="retro"] [data-hz="stat:initiative"] { grid-area: p1; }
+  [data-skin="retro"] [data-hz="stat:speed"] { grid-area: p2; }
+  [data-skin="retro"] [data-hz="stat:proficiency"] { grid-area: p3; }
+  [data-skin="retro"] [data-hz="stat:perception"] { grid-area: p4; }
+  [data-skin="retro"] :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) { align-self: stretch; min-height: 86px; }
+  [data-skin="retro"] .hp-box { align-self: stretch; align-content: center; }
+}
+@media screen and (max-width: 760px) {
+  [data-skin="retro"] .combat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "hp hp" "ac p1" "ac p2" "p3 p4"; }
+}
+@media screen and (min-width: 761px) {
+  /* the armor box takes one cell so all six trackers fit on one row; its controls wrap */
+  [data-skin="retro"] .armor-box { grid-column: auto; }
+  [data-skin="retro"] .armor-box .armor-controls { gap: 4px 10px; }
 }

@@ -222,7 +222,7 @@ function render() {
           <button type="button" class="btn" data-hp="damage">Damage</button>
           <button type="button" class="btn" data-hp="heal">Heal</button>
         </div>
-        <div class="hp-bar" aria-hidden="true"><span style="width:${hpMax ? Math.min(100, (p.hp.current / hpMax) * 100) : 0}%"></span></div>`),
+        <div class="hp-bar" aria-hidden="true" data-state="${hpMax && p.hp.current <= hpMax / 4 ? "low" : hpMax && p.hp.current <= hpMax / 2 ? "bloodied" : "ok"}"><span style="width:${hpMax ? Math.min(100, (p.hp.current / hpMax) * 100) : 0}%"></span></div>`),
     hz("stat:hitdice", "Hit dice", "stat-box tracker-box", `
         <span class="label">Hit dice</span>
         ${s.hitDice.map(h => { const used = Math.min(h.count, p.hitDiceSpent[h.die] ?? 0); return `<span class="stepper${s.hitDice.length > 1 ? " hd-row" : ""}"><span class="muted">d${h.die}</span>
