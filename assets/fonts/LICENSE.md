@@ -20,7 +20,7 @@ the fonts' exact license terms and keep this credit with them.
 |---|---|---|
 | Magic-School-Two.woff2 | Magic School Two | Banner and page titles. © 2004 Michael Hagemann, [FontMesa](https://www.fontmesa.com) |
 | Aethrim.woff2 | Aethrim | Headings, title bars, step names, stat and ability names. Aethrim Demo © 2025 artisantemplate; the file's license field says "Personal & Commercial Use" |
-| Lumos.woff2 | Lumos | Paragraph text. Carpe Saponem Fonts |
+| Blacher.woff2 | Blacher | All other text. © Burntilldead, Illustrator and Typefoundry |
 
-Both were converted to WOFF2 unchanged from the files Nathan supplied. Check each designer's
+All were converted to WOFF2 unchanged from the files Nathan supplied. Check each designer's
 terms for web use before sharing the site beyond your own group.

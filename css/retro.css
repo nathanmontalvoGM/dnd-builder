@@ -1,17 +1,18 @@
 /* "2002" skin: an early-2000s RPG fansite. Fixed-width page on a stone tile, maroon title bars,
-   Verdana and Georgia, beveled buttons, a nav bar under the banner and a footer with badges.
+   custom fantasy fonts, beveled buttons, a nav bar under the banner and a footer with badges.
    Switched on by <html data-skin="retro">. Screen only, so Export PDF keeps the print styles. */
 
 /* 2002 skin fonts: Magic School Two for the banner and page titles, Aethrim for headings and
-   labels (title bars, step names, stat and ability names), Lumos for paragraph text. */
+   labels (title bars, step names, stat and ability names), Blacher for everything else.
+   Blacher is narrow with a small x-height, so it's drawn 15% larger than the sizes below say. */
+@font-face { font-family: "Blacher"; src: url("../assets/fonts/Blacher.woff2") format("woff2"); font-display: swap; size-adjust: 115%; }
 @font-face { font-family: "Magic School Two"; src: url("../assets/fonts/Magic-School-Two.woff2") format("woff2"); font-display: swap; }
 /* The Aethrim demo swaps most punctuation (' " ( ) - + : & and others) for a watermark badge, so it
-   only covers letters, digits, space, comma and period; everything else falls back to Georgia. */
+   only covers letters, digits, space, comma and period; everything else falls back to Blacher. */
 @font-face {
   font-family: "Aethrim"; src: url("../assets/fonts/Aethrim.woff2") format("woff2"); font-display: swap;
   unicode-range: U+0020, U+002C, U+002E, U+0030-0039, U+0041-005A, U+0061-007A;
 }
-@font-face { font-family: "Lumos"; src: url("../assets/fonts/Lumos.woff2") format("woff2"); font-display: swap; }
 
 @media screen {
 
@@ -21,12 +22,12 @@
   --verdigris: #8b0000; --verdigris-soft: #f2dcc8; --heading: #7a0e0e; --gold: #b8962e;
   --gilt: #7a5a00; --gilt-soft: #f4e6b0; --note: #e6dcc4; --danger: #a00000;
   --visited: #5b2a6e; --active: #cc0000; --title-outline: #000;
-  --serif: Georgia, "Times New Roman", Times, serif;
-  --sans: Verdana, Tahoma, Geneva, Arial, sans-serif;
-  --display: "Aethrim", Georgia, "Times New Roman", serif;
-  --label: "Aethrim", Georgia, "Times New Roman", serif;
-  --title: "Magic School Two", Georgia, "Times New Roman", serif;
-  --body: "Lumos", Georgia, "Times New Roman", serif;
+  --serif: "Blacher", serif;
+  --sans: "Blacher", serif;
+  --body: "Blacher", serif;
+  --display: "Aethrim", "Blacher", serif;
+  --label: "Aethrim", "Blacher", serif;
+  --title: "Magic School Two", "Blacher", serif;
   --bar-top: #9b1c1c; --bar-bottom: #4d0606; --box-border: #6b5333; --side: #2a1d14;
   --radius-sm: 0; --radius: 0;
   color-scheme: light;
@@ -109,9 +110,10 @@
 [data-skin="retro"] .retro-only { display: block; }
 
 /* ---------- type ---------- */
+[data-skin="retro"] button, [data-skin="retro"] input, [data-skin="retro"] select, [data-skin="retro"] textarea { font-family: var(--sans); }
 [data-skin="retro"] p, [data-skin="retro"] .feature-body, [data-skin="retro"] .entry-body, [data-skin="retro"] .option-text,
 [data-skin="retro"] .entry li, [data-skin="retro"] .feature-body li, [data-skin="retro"] .step-intro p,
-[data-skin="retro"] .update-note p, [data-skin="retro"] .edit-banner p { font: 15px/1.55 var(--body); }
+[data-skin="retro"] .update-note p, [data-skin="retro"] .edit-banner p { font: 14px/1.5 var(--body); }
 [data-skin="retro"] h1, [data-skin="retro"] .sheet-id h1, [data-skin="retro"] .home h1, [data-skin="retro"] .empty h1,
 [data-skin="retro"] .entry-head h1, [data-skin="retro"] .step-body > h1 {
   font: normal 30px/1.2 var(--title); color: var(--heading); text-transform: none; letter-spacing: 0; text-shadow: 1px 1px 0 #e8d7a8;
@@ -426,7 +428,7 @@
 .skin-pick select { font: inherit; font-size: 0.85rem; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.2rem 0.35rem; }
 .badge-88 {
   display: inline-block; width: 88px; height: 31px; margin: 4px 2px 0; box-sizing: border-box; vertical-align: middle;
-  border: 1px solid #000; font: bold 10px/1.25 Verdana, Tahoma, sans-serif; text-align: center; padding: 3px 2px; overflow: hidden;
+  border: 1px solid #000; font: bold 10px/1.25 "Blacher", serif; text-align: center; padding: 3px 2px; overflow: hidden;
 }
 .badge-88.b1 { background: linear-gradient(#5a0a0a, #2a0303); color: #f0cf6a; }
 .badge-88.b2 { background: linear-gradient(#e6e6e6, #9a9a9a); color: #000; }
