@@ -2,6 +2,10 @@
    Verdana and Georgia, beveled buttons, a nav bar under the banner and a footer with badges.
    Switched on by <html data-skin="retro">. Screen only, so Export PDF keeps the print styles. */
 
+/* 2002 skin fonts: Magic School Two for the banner and page titles, Lumos for paragraph text. */
+@font-face { font-family: "Magic School Two"; src: url("../assets/fonts/Magic-School-Two.woff2") format("woff2"); font-display: swap; }
+@font-face { font-family: "Lumos"; src: url("../assets/fonts/Lumos.woff2") format("woff2"); font-display: swap; }
+
 @media screen {
 
 /* ---------- tokens ---------- */
@@ -13,7 +17,8 @@
   --serif: Georgia, "Times New Roman", Times, serif;
   --sans: Verdana, Tahoma, Geneva, Arial, sans-serif;
   --display: Georgia, "Times New Roman", serif;
-  --title: Georgia, "Times New Roman", serif;
+  --title: "Magic School Two", Georgia, "Times New Roman", serif;
+  --body: "Lumos", Georgia, "Times New Roman", serif;
   --bar-top: #9b1c1c; --bar-bottom: #4d0606; --box-border: #6b5333; --side: #2a1d14;
   --radius-sm: 0; --radius: 0;
   color-scheme: light;
@@ -53,7 +58,7 @@
   padding: 12px 16px; text-decoration: none; text-align: center;
   background: linear-gradient(rgba(60, 8, 8, 0.55), rgba(20, 4, 4, 0.85)), url("../assets/retro/stone.png");
   border-bottom: 3px double #b8962e;
-  font: bold 34px/1.1 var(--title); letter-spacing: 1px; text-transform: none;
+  font: normal 40px/1.1 var(--title); letter-spacing: 1px; text-transform: none;
   color: #f0cf6a; text-shadow: 2px 2px 0 #000, 0 0 6px #6b0000;
 }
 [data-skin="retro"] .brand:visited, [data-skin="retro"] .brand:hover { color: #f0cf6a; text-decoration: none; }
@@ -98,12 +103,12 @@
 /* ---------- type ---------- */
 [data-skin="retro"] p, [data-skin="retro"] .feature-body, [data-skin="retro"] .entry-body, [data-skin="retro"] .option-text,
 [data-skin="retro"] .entry li, [data-skin="retro"] .feature-body li, [data-skin="retro"] .step-intro p,
-[data-skin="retro"] .update-note p, [data-skin="retro"] .edit-banner p { font: 13px/1.55 var(--sans); }
+[data-skin="retro"] .update-note p, [data-skin="retro"] .edit-banner p { font: 15px/1.55 var(--body); }
 [data-skin="retro"] h1, [data-skin="retro"] .sheet-id h1, [data-skin="retro"] .home h1, [data-skin="retro"] .empty h1,
 [data-skin="retro"] .entry-head h1, [data-skin="retro"] .step-body > h1 {
-  font: bold 24px/1.2 var(--title); color: var(--heading); text-transform: none; letter-spacing: 0; text-shadow: 1px 1px 0 #e8d7a8;
+  font: normal 30px/1.2 var(--title); color: var(--heading); text-transform: none; letter-spacing: 0; text-shadow: 1px 1px 0 #e8d7a8;
 }
-[data-skin="retro"] .sheet-id h1 { font-size: 28px; }
+[data-skin="retro"] .sheet-id h1 { font-size: 36px; }
 [data-skin="retro"] .home h1::after, [data-skin="retro"] .empty h1::after {
   width: 100%; height: 0; margin: 6px 0 0; clip-path: none; background: none; border-top: 1px solid var(--box-border); border-bottom: 1px solid #fff;
 }
@@ -324,7 +329,7 @@
   }
   [data-skin="retro"] .topnav, [data-skin="retro"] .pack-status, [data-skin="retro"] .skin-pick { flex-wrap: wrap; border-left: 0; }
   [data-skin="retro"] .pack-status[hidden], [data-skin="retro"] .topnav[hidden] { display: none; }
-  [data-skin="retro"] .brand { font-size: 20px; gap: 8px; }
+  [data-skin="retro"] .brand { font-size: 26px; gap: 8px; }
   [data-skin="retro"] .brand-gif { height: 44px; }
   [data-skin="retro"] .wizard { grid-template-columns: 1fr; }
 

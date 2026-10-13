@@ -13,3 +13,13 @@ These are fan-made remakes of the fonts used in the D&D 5e books, taken unchange
 The remakes were made by the D&D fan community (Solbera and others) for free fan use. If you
 publish this app somewhere besides your own group, check The Homebrewery's current credits for
 the fonts' exact license terms and keep this credit with them.
+
+## 2002 skin fonts
+
+| File | Family used in `css/retro.css` | Used for |
+|---|---|---|
+| Magic-School-Two.woff2 | Magic School Two | Banner and page titles. © 2004 Michael Hagemann, [FontMesa](https://www.fontmesa.com) |
+| Lumos.woff2 | Lumos | Paragraph text. Carpe Saponem Fonts |
+
+Both were converted to WOFF2 unchanged from the files Nathan supplied. Check each designer's
+terms for web use before sharing the site beyond your own group.
