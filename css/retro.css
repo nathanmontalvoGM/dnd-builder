@@ -2,8 +2,15 @@
    Verdana and Georgia, beveled buttons, a nav bar under the banner and a footer with badges.
    Switched on by <html data-skin="retro">. Screen only, so Export PDF keeps the print styles. */
 
-/* 2002 skin fonts: Magic School Two for the banner and page titles, Lumos for paragraph text. */
+/* 2002 skin fonts: Magic School Two for the banner and page titles, Aethrim for headings and
+   labels (title bars, step names, stat and ability names), Lumos for paragraph text. */
 @font-face { font-family: "Magic School Two"; src: url("../assets/fonts/Magic-School-Two.woff2") format("woff2"); font-display: swap; }
+/* The Aethrim demo swaps most punctuation (' " ( ) - + : & and others) for a watermark badge, so it
+   only covers letters, digits, space, comma and period; everything else falls back to Georgia. */
+@font-face {
+  font-family: "Aethrim"; src: url("../assets/fonts/Aethrim.woff2") format("woff2"); font-display: swap;
+  unicode-range: U+0020, U+002C, U+002E, U+0030-0039, U+0041-005A, U+0061-007A;
+}
 @font-face { font-family: "Lumos"; src: url("../assets/fonts/Lumos.woff2") format("woff2"); font-display: swap; }
 
 @media screen {
@@ -16,7 +23,8 @@
   --visited: #5b2a6e; --active: #cc0000; --title-outline: #000;
   --serif: Georgia, "Times New Roman", Times, serif;
   --sans: Verdana, Tahoma, Geneva, Arial, sans-serif;
-  --display: Georgia, "Times New Roman", serif;
+  --display: "Aethrim", Georgia, "Times New Roman", serif;
+  --label: "Aethrim", Georgia, "Times New Roman", serif;
   --title: "Magic School Two", Georgia, "Times New Roman", serif;
   --body: "Lumos", Georgia, "Times New Roman", serif;
   --bar-top: #9b1c1c; --bar-bottom: #4d0606; --box-border: #6b5333; --side: #2a1d14;
@@ -113,11 +121,12 @@
   width: 100%; height: 0; margin: 6px 0 0; clip-path: none; background: none; border-top: 1px solid var(--box-border); border-bottom: 1px solid #fff;
 }
 [data-skin="retro"] h2, [data-skin="retro"] h3, [data-skin="retro"] .group-title {
-  font-family: var(--display); font-weight: bold; color: var(--heading); letter-spacing: 0; font-variant: normal;
+  font-family: var(--display); font-weight: normal; color: var(--heading); letter-spacing: 0; font-variant: normal;
 }
-[data-skin="retro"] h3, [data-skin="retro"] .group-title { font-size: 14px; }
+[data-skin="retro"] h2 { font-size: 22px; }
+[data-skin="retro"] h3, [data-skin="retro"] .group-title { font-size: 16px; }
 [data-skin="retro"] .pick-name, [data-skin="retro"] .option-name, [data-skin="retro"] .choice-head strong,
-[data-skin="retro"] .home-card strong, [data-skin="retro"] .decision-head h3 { font: bold 14px var(--serif); color: var(--heading); }
+[data-skin="retro"] .home-card strong, [data-skin="retro"] .decision-head h3 { font: normal 17px var(--label); color: var(--heading); }
 [data-skin="retro"] .muted, [data-skin="retro"] .sheet-id p { color: var(--muted); }
 [data-skin="retro"] .label, [data-skin="retro"] dt { font-size: 11px; }
 
@@ -136,15 +145,15 @@
 [data-skin="retro"] .panel > h2, [data-skin="retro"] .panel > .panel-head {
   margin: 0 -8px 8px; padding: 3px 8px;
   background: linear-gradient(var(--bar-top), var(--bar-bottom)); border: 0; border-bottom: 1px solid #000;
-  font: bold 13px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000;
+  font: normal 15px/1.3 var(--label); color: #fff; text-shadow: 1px 1px 0 #000;
 }
-[data-skin="retro"] .panel > .panel-head > h2 { font: bold 13px/1.4 var(--sans); color: #fff; margin: 0; padding: 0; border: 0; }
+[data-skin="retro"] .panel > .panel-head > h2 { font: normal 15px/1.3 var(--label); color: #fff; margin: 0; padding: 0; border: 0; }
 [data-skin="retro"] .panel > h2 label { color: #fff; }
 [data-skin="retro"] .panel-head .link-btn, [data-skin="retro"] .panel-tools { color: #f0cf6a; }
 [data-skin="retro"] .entry { padding: 10px 12px 14px; }
 [data-skin="retro"] .entry h2 {
   margin: 18px -12px 8px; padding: 3px 12px; border: 0; border-bottom: 1px solid #000;
-  background: linear-gradient(var(--bar-top), var(--bar-bottom)); font: bold 13px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000;
+  background: linear-gradient(var(--bar-top), var(--bar-bottom)); font: normal 15px/1.3 var(--label); color: #fff; text-shadow: 1px 1px 0 #000;
 }
 [data-skin="retro"] .stat-box, [data-skin="retro"] .hp-box { border: 2px outset #d8c9a4; background: #f7efd9; }
 [data-skin="retro"] .ac-box, [data-skin="retro"] .hp-box { border: 2px solid var(--box-border); }
@@ -243,7 +252,7 @@
 [data-skin="retro"] .steps::before {
   content: "Steps"; display: block; padding: 3px 8px;
   background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
-  font: bold 13px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000;
+  font: normal 15px/1.3 var(--label); color: #fff; text-shadow: 1px 1px 0 #000;
 }
 [data-skin="retro"] .steps ol { gap: 0; }
 [data-skin="retro"] .steps li + li { border-top: 1px dotted #c8b58a; }
@@ -251,14 +260,14 @@
   grid-template-columns: 20px 1fr; column-gap: 6px; padding: 4px 6px; border-radius: 0;
   font: 12px/1.4 var(--sans); color: #8b0000; text-decoration: none;
 }
-[data-skin="retro"] .steps .step-title { text-decoration: underline; }
+[data-skin="retro"] .steps .step-title { font: 15px/1.3 var(--label); text-decoration: underline; }
 [data-skin="retro"] .steps .step-current .step-title { text-decoration: none; }
 [data-skin="retro"] .steps button:hover { background: #f6e7b4; color: #cc0000; }
 [data-skin="retro"] .step-num {
   width: 18px; height: 18px; border-radius: 0 !important; font: bold 11px/1 var(--sans);
   background: linear-gradient(#fffef9, #e8dfc6); border: 1px solid #8a7a5a; color: #3a2a1a;
 }
-[data-skin="retro"] .steps .step-current { background: #f6e7b4; color: #000; font-weight: bold; }
+[data-skin="retro"] .steps .step-current { background: #f6e7b4; color: #000; }
 [data-skin="retro"] .steps .step-current .step-num { background: #8b0000; border-color: #000; color: #fff; }
 [data-skin="retro"] .steps .step-done .step-num { background: #dfe9c8; border-color: #4f6a2a; color: #2f4a12; }
 [data-skin="retro"] .steps .step-open .step-num { background: #fff3b0; border-color: #b8962e; color: #6b4a00; }
@@ -277,7 +286,7 @@
 [data-skin="retro"] .live-summary > h2 {
   margin: 0 -8px 4px; padding: 3px 8px;
   background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
-  font: bold 13px/1.4 var(--sans); font-variant: normal; color: #fff; text-shadow: 1px 1px 0 #000;
+  font: normal 15px/1.3 var(--label); font-variant: normal; color: #fff; text-shadow: 1px 1px 0 #000;
 }
 [data-skin="retro"] .live-summary > p { margin: 0 0 8px; font-size: 11px; }
 [data-skin="retro"] .scores { gap: 4px; margin-bottom: 8px; }
@@ -344,7 +353,7 @@
 [data-skin="retro"] .stat-box > .label, [data-skin="retro"] .stat-box > label {
   display: block; margin: 0 -6px 2px; padding: 2px 6px;
   background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
-  font: bold 11px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000; text-align: center;
+  font: normal 13px/1.35 var(--label); color: #fff; text-shadow: 1px 1px 0 #000; text-align: center;
 }
 [data-skin="retro"] .stat-box > strong {
   display: inline-block; justify-self: center; min-width: 3.2em; margin: 2px auto 0; padding: 2px 8px;
@@ -363,7 +372,7 @@
 [data-skin="retro"] .hp-box::before {
   content: "Hit points"; display: block; margin: 0 -8px 6px; padding: 2px 6px;
   background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000;
-  font: bold 11px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000; text-align: center;
+  font: normal 13px/1.35 var(--label); color: #fff; text-shadow: 1px 1px 0 #000; text-align: center;
 }
 [data-skin="retro"] .hp-current > .label { display: none; }
 [data-skin="retro"] .hp-temp > .label { font-size: 11px; }
@@ -381,7 +390,7 @@
   margin: 0 0 2px; padding: 3px 6px; border-bottom: 1px solid #000;
   background: linear-gradient(var(--bar-top), var(--bar-bottom));
 }
-[data-skin="retro"] .ability-top h3 { font: bold 13px/1.4 var(--sans); color: #fff; text-shadow: 1px 1px 0 #000; }
+[data-skin="retro"] .ability-top h3 { font: normal 15px/1.3 var(--label); color: #fff; text-shadow: 1px 1px 0 #000; }
 [data-skin="retro"] .ability-mod { font: bold 18px/1 var(--serif); color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
 [data-skin="retro"] .ability-score { font: bold 11px/1.4 var(--sans); color: #000; background: #fff; border: 2px inset #d4d0c8; padding: 0 5px; }
 [data-skin="retro"] .ability-block ul { margin: 0; }

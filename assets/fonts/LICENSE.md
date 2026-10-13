@@ -19,6 +19,7 @@ the fonts' exact license terms and keep this credit with them.
 | File | Family used in `css/retro.css` | Used for |
 |---|---|---|
 | Magic-School-Two.woff2 | Magic School Two | Banner and page titles. © 2004 Michael Hagemann, [FontMesa](https://www.fontmesa.com) |
+| Aethrim.woff2 | Aethrim | Headings, title bars, step names, stat and ability names. Aethrim Demo © 2025 artisantemplate; the file's license field says "Personal & Commercial Use" |
 | Lumos.woff2 | Lumos | Paragraph text. Carpe Saponem Fonts |
 
 Both were converted to WOFF2 unchanged from the files Nathan supplied. Check each designer's
