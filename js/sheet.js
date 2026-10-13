@@ -181,7 +181,7 @@ function hideBtn(id, label) {
 // Wrap a box, panel, group or row so it can be hidden.
 function hz(id, label, cls, inner, tag = "div") {
   if (!shown(id)) return "";
-  return `<${tag} class="${cls} hideable${isHidden(id) ? " is-hidden" : ""}">${hideBtn(id, label)}${inner}</${tag}>`;
+  return `<${tag} class="${cls} hideable${isHidden(id) ? " is-hidden" : ""}" data-hz="${esc(id)}">${hideBtn(id, label)}${inner}</${tag}>`;
 }
 
 // ---------- render ----------

@@ -536,3 +536,159 @@
   [data-skin="retro"] .features-panel .feature-rows > li.open { background: #fffdf4; }
   [data-skin="retro"] .features-panel .feature-rows > li:last-child { border-bottom: 0; }
 }
+
+/* ---------- shaped stats and pixel icons ----------
+   Key numbers get their own shapes instead of the standard box: Armor class on a shield, hit
+   points in a heart over a potion-vial bar, the four quick numbers on dark plaques, and each
+   ability's modifier on a crest. 16x16 pixel icons label stats, panels, rests and class cards.
+   Frames are in assets/retro/frames, icons in assets/retro/icons. */
+@media screen {
+  /* icon helper: every icon is a 16x16 pixel drawing shown crisp */
+  [data-skin="retro"] [data-hz] > .label::before,
+  [data-skin="retro"] [data-hz] > h2::before, [data-skin="retro"] [data-hz] > .panel-head > h2::before,
+  [data-skin="retro"] .rest-group .btn::before {
+    background: var(--icon) center / 16px 16px no-repeat; image-rendering: pixelated;
+  }
+  [data-skin="retro"] [data-hz] > .label::before,
+  [data-skin="retro"] [data-hz] > h2::before, [data-skin="retro"] [data-hz] > .panel-head > h2::before,
+  [data-skin="retro"] .rest-group .btn::before {
+    content: ""; display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px;
+  }
+  [data-skin="retro"] [data-hz="stat:ac"] { --icon: url("../assets/retro/icons/shield.svg"); }
+  [data-skin="retro"] [data-hz="stat:initiative"] { --icon: url("../assets/retro/icons/bolt.svg"); }
+  [data-skin="retro"] [data-hz="stat:speed"] { --icon: url("../assets/retro/icons/boot.svg"); }
+  [data-skin="retro"] [data-hz="stat:proficiency"] { --icon: url("../assets/retro/icons/star.svg"); }
+  [data-skin="retro"] [data-hz="stat:perception"] { --icon: url("../assets/retro/icons/eye.svg"); }
+  [data-skin="retro"] [data-hz="stat:size"] { --icon: url("../assets/retro/icons/person.svg"); }
+  [data-skin="retro"] [data-hz="stat:hitdice"] { --icon: url("../assets/retro/icons/die.svg"); }
+  [data-skin="retro"] [data-hz="stat:death"] { --icon: url("../assets/retro/icons/skull.svg"); }
+  [data-skin="retro"] [data-hz="stat:inspiration"] { --icon: url("../assets/retro/icons/sparkle.svg"); }
+  [data-skin="retro"] [data-hz="stat:exhaustion"] { --icon: url("../assets/retro/icons/zzz.svg"); }
+  [data-skin="retro"] [data-hz="stat:armor"] { --icon: url("../assets/retro/icons/shield.svg"); }
+  [data-skin="retro"] [data-hz="panel:attacks"] { --icon: url("../assets/retro/icons/sword.svg"); }
+  [data-skin="retro"] [data-hz="panel:glance"] { --icon: url("../assets/retro/icons/eye.svg"); }
+  [data-skin="retro"] [data-hz="panel:yournotes"], [data-skin="retro"] [data-hz="panel:notes"] { --icon: url("../assets/retro/icons/quill.svg"); }
+  [data-skin="retro"] [data-hz="panel:resources"] { --icon: url("../assets/retro/icons/hourglass.svg"); }
+  [data-skin="retro"] [data-hz="panel:training"] { --icon: url("../assets/retro/icons/star.svg"); }
+  [data-skin="retro"] [data-hz="panel:defenses"] { --icon: url("../assets/retro/icons/shield.svg"); }
+  [data-skin="retro"] [data-hz="panel:equipment"] { --icon: url("../assets/retro/icons/bag.svg"); }
+  [data-skin="retro"] [data-hz="panel:features"] { --icon: url("../assets/retro/icons/scroll.svg"); }
+  [data-skin="retro"] [data-hz="panel:spells"] { --icon: url("../assets/retro/icons/book.svg"); }
+
+  /* rest buttons: pixel hourglass and moon instead of the line icons */
+  [data-skin="retro"] .rest-group .btn svg { display: none; }
+  [data-skin="retro"] .rest-group [data-rest="short"]::before { --icon: url("../assets/retro/icons/hourglass.svg"); }
+  [data-skin="retro"] .rest-group [data-rest="long"]::before { --icon: url("../assets/retro/icons/moon.svg"); }
+
+  /* class cards in the builder and in Level up */
+  [data-skin="retro"] .pick-card:has(input[data-pick="class"], input[data-lu-class]) {
+    padding-left: 54px; background-position: 10px 10px; background-size: 32px 32px; background-repeat: no-repeat; image-rendering: pixelated;
+    min-height: 56px;
+  }
+  [data-skin="retro"] .pick-card:has(input[value="barbarian"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/barbarian.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="bard"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/bard.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="cleric"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/cleric.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="druid"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/druid.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="fighter"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/fighter.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="monk"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/monk.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="paladin"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/paladin.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="ranger"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/ranger.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="rogue"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/rogue.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="sorcerer"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/sorcerer.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="warlock"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/warlock.svg"); }
+  [data-skin="retro"] .pick-card:has(input[value="wizard"]:is([data-pick="class"], [data-lu-class])) { background-image: url("../assets/retro/icons/wizard.svg"); }
+
+  /* Armor class: a heater shield; the label sits on its maroon top band */
+  [data-skin="retro"] [data-hz="stat:ac"] {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 0 4px 6px;
+    background: url("../assets/retro/frames/shield.svg") center top / 100px 116px no-repeat; border: 0;
+  }
+  [data-skin="retro"] [data-hz="stat:ac"] > label {
+    width: 76px; margin: 12px 0 0; padding: 2px 0 0; background: none; border: 0;
+    font-size: 12px; line-height: 1.2; color: #fff3c4; text-shadow: 1px 1px 0 #000; white-space: nowrap;
+  }
+  [data-skin="retro"] .ac-box input[type="number"] {
+    width: 3ch; max-width: none; margin: 12px 0 0; padding: 0; background: transparent; border: 0;
+    font: bold 34px/1 var(--serif); color: #3d0404; text-align: center;
+  }
+  [data-skin="retro"] .ac-box input[type="number"]:hover, [data-skin="retro"] .ac-box input[type="number"]:focus { background: rgba(255, 255, 255, 0.6); outline: 1px dotted #000; }
+  [data-skin="retro"] [data-hz="stat:ac"] > small { margin-top: 44px; max-width: 100%; }
+
+  /* the four quick numbers: dark plaques, value in gold over the label */
+  [data-skin="retro"] :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 12px 10px 10px;
+    align-self: center; min-height: 92px;
+    background: url("../assets/retro/frames/plaque.svg") center / 100% 100% no-repeat; border: 0;
+  }
+  [data-skin="retro"] :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) > strong {
+    order: 1; margin: 0; padding: 0; min-width: 0; background: none; border: 0;
+    font: bold 32px/1.05 var(--serif); color: #f0cf6a; text-shadow: 2px 2px 0 #000;
+  }
+  [data-skin="retro"] :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) > .label {
+    order: 2; margin: 0; padding: 0; background: none; border: 0; font-size: 13px; color: #fff3c4;
+  }
+  [data-skin="retro"] :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) > small { order: 3; color: #d9c79c; }
+
+  /* Hit points: a heart holding the current HP, temp HP and damage/heal beside it, a vial below */
+  [data-skin="retro"] .hp-box {
+    display: grid; grid-template-columns: 124px minmax(0, 1fr); align-items: center; column-gap: 16px; row-gap: 6px;
+    grid-template-areas: "title title" "heart temp" "heart adjust" "bar bar";
+  }
+  [data-skin="retro"] .hp-box::before { grid-area: title; }
+  [data-skin="retro"] .hp-numbers { display: contents; }
+  [data-skin="retro"] .hp-box .hp-current {
+    grid-area: heart; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+    width: 120px; height: 104px; padding-bottom: 14px; background: url("../assets/retro/frames/heart.svg") center / 120px 104px no-repeat;
+  }
+  [data-skin="retro"] .hp-box .hp-current input[type="number"] {
+    width: 3.2ch; padding: 0; background: transparent; border: 0; text-align: center;
+    font: bold 32px/1 var(--serif); color: #fff; text-shadow: 2px 2px 0 #000;
+  }
+  [data-skin="retro"] .hp-box .hp-current input[type="number"]:hover, [data-skin="retro"] .hp-box .hp-current input[type="number"]:focus { background: rgba(0, 0, 0, 0.25); outline: 1px dotted #fff; }
+  [data-skin="retro"] .hp-box .hp-max { font: bold 15px/1 var(--serif); color: #ffd9d0; text-shadow: 1px 1px 0 #000; }
+  [data-skin="retro"] .hp-box .hp-temp { grid-area: temp; display: flex; align-items: center; gap: 8px; }
+  [data-skin="retro"] .hp-box .hp-temp > .label { font-size: 13px; }
+  [data-skin="retro"] .hp-box .hp-adjust { grid-area: adjust; }
+  /* vial: a rounded glass tube of red potion with a highlight */
+  [data-skin="retro"] .hp-box .hp-bar {
+    grid-area: bar; height: 16px; border: 2px solid #1a0404; border-radius: 9px !important; overflow: hidden;
+    background: linear-gradient(#2a0a0a, #4a1414); box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.6) !important; position: relative;
+  }
+  [data-skin="retro"] .hp-box .hp-bar span { background: linear-gradient(#ff6a5a, #c0182a 45%, #6a0010); border-radius: 0 !important; }
+  [data-skin="retro"] .hp-box .hp-bar::after {
+    content: ""; position: absolute; left: 6px; right: 6px; top: 2px; height: 4px; border-radius: 3px !important; background: rgba(255, 255, 255, 0.35);
+  }
+
+  /* abilities: name bar on top, the modifier on a crest at the left, skills to its right */
+  [data-skin="retro"] .ability-block {
+    display: grid; grid-template-columns: 68px minmax(0, 1fr); grid-template-areas: "name name" "crest list";
+    column-gap: 4px; padding: 0 0 4px;
+  }
+  [data-skin="retro"] .ability-block::before {
+    content: ""; grid-area: crest; align-self: start; justify-self: center; width: 60px; height: 71px; margin-top: 2px;
+    background: url("../assets/retro/frames/crest.svg") center / 60px 71px no-repeat;
+  }
+  [data-skin="retro"] .ability-top { display: contents; }
+  [data-skin="retro"] .ability-top h3 {
+    grid-area: name; margin: 0 0 2px; padding: 3px 6px; border-bottom: 1px solid #000;
+    background: linear-gradient(var(--bar-top), var(--bar-bottom));
+  }
+  [data-skin="retro"] .ability-block .ability-mod {
+    grid-area: crest; align-self: start; justify-self: center; margin-top: 15px; z-index: 1;
+    font: bold 26px/1 var(--serif); color: #7a0e0e; text-shadow: 1px 1px 0 #fff3c4;
+  }
+  [data-skin="retro"] .ability-block .ability-score {
+    grid-area: crest; align-self: start; justify-self: center; margin-top: 48px; z-index: 1;
+    min-width: 30px; padding: 1px 6px; text-align: center; border: 1px solid #7a0e0e; border-radius: 50% !important;
+    background: #fff; font-size: 12px;
+  }
+  [data-skin="retro"] .ability-block ul { grid-area: list; align-self: start; }
+  [data-skin="retro"] .ability-block { min-height: 102px; }
+}
+@media screen { [data-skin="retro"] .layout-mode .ability-top h3 { padding-right: 56px; } }
+@media screen {
+  /* edit-layout mode: the Hide button sits beside the shape, so the labels keep their normal spacing */
+  [data-skin="retro"] .layout-mode [data-hz="stat:ac"] > label { padding: 2px 0 0; }
+  [data-skin="retro"] .layout-mode :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) > .label { padding: 0; }
+  [data-skin="retro"] .layout-mode :is([data-hz="stat:initiative"], [data-hz="stat:speed"], [data-hz="stat:proficiency"], [data-hz="stat:perception"]) { padding-top: 22px; }
+}
