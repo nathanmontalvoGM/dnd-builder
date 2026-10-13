@@ -485,7 +485,7 @@ function stepReview(res, s) {
       <section><h2>Abilities</h2><table class="mini-table">${ABILITY_KEYS.map(a => `<tr><th scope="row">${ABILITIES[a]}</th><td>${s.scores[a]}</td><td>${signed(s.mods[a])}</td><td class="muted">save ${signed(s.saves.find(x => x.ability === a).bonus)}${s.saves.find(x => x.ability === a).prof ? " ●" : ""}</td></tr>`).join("")}</table></section>
       <section><h2>Combat</h2><dl class="facts compact">
         <div><dt>Hit points</dt><dd>${s.hp ?? "—"}</dd></div><div><dt>Hit dice</dt><dd>${s.hitDice.map(h => `${h.count}d${h.die}`).join(" + ")}</dd></div>
-        <div><dt>Armor class</dt><dd>${s.ac} unarmored</dd></div><div><dt>Initiative</dt><dd>${signed(s.initiative)}</dd></div>
+        <div><dt>Armor class</dt><dd>${s.ac}<small> unarmored</small></dd></div><div><dt>Initiative</dt><dd>${signed(s.initiative)}</dd></div>
         <div><dt>Speed</dt><dd>${s.speed} ft</dd></div><div><dt>Passive Perception</dt><dd>${s.passivePerception}</dd></div>
         ${s.darkvision ? `<div><dt>Darkvision</dt><dd>${s.darkvision} ft</dd></div>` : ""}
         ${s.spellcasting ? `<div><dt>Spell save DC</dt><dd>${s.spellcasting.dc}</dd></div><div><dt>Spell attack</dt><dd>${signed(s.spellcasting.attack)}</dd></div>` : ""}

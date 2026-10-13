@@ -661,3 +661,126 @@
   [data-skin="retro"] .armor-box { grid-column: auto; }
   [data-skin="retro"] .armor-box .armor-controls { gap: 4px 10px; }
 }
+
+/* ---------- builder: the character sheet's shapes and frames ----------
+   Step titles become a nameplate with the tip attached, step numbers are round seals, picked
+   cards and choices turn into dark plaques, and the character summary shows ability crests,
+   a heart for hit points, a shield for AC and plaques for the rest. The ability-scores step and
+   the review page use the same pieces. */
+@media screen {
+  /* step title nameplate, tip attached underneath */
+  [data-skin="retro"] .step-body > h1 {
+    margin: 0; padding: 14px 18px 8px; font-size: 46px; line-height: 1;
+    background: linear-gradient(rgba(255, 250, 235, 0.85), rgba(239, 228, 198, 0.9)), url("../assets/retro/parchment.png");
+    border: 3px double var(--box-border); text-shadow: 2px 2px 0 #e8d7a8, 3px 3px 0 rgba(0, 0, 0, 0.25);
+  }
+  [data-skin="retro"] .step-body > h1 + .step-intro { margin-top: 0; border: 3px double var(--box-border); border-top: 0; border-bottom-style: double; }
+  [data-skin="retro"] .step-body > h1:has(+ .step-intro) { border-bottom: 1px solid #c8b58a; }
+
+  /* step numbers: round seals. Current maroon, done green, unfinished gold */
+  [data-skin="retro"] .steps button { grid-template-columns: 24px 1fr; }
+  [data-skin="retro"] .step-num {
+    width: 22px; height: 22px; border-radius: 50% !important; font: bold 12px/1 var(--serif);
+    background: radial-gradient(circle at 35% 30%, #fffef9, #e3d0a0); border: 2px solid #8a7a5a; color: #3a2a1a;
+  }
+  [data-skin="retro"] .steps .step-current .step-num { background: radial-gradient(circle at 35% 30%, #c0392b, #7a0e0e 60%, #3d0404); border-color: #b8962e; color: #fff3c4; }
+  [data-skin="retro"] .steps .step-done .step-num { background: radial-gradient(circle at 35% 30%, #8ed27a, #2e7e22 60%, #144a0c); border-color: #b8962e; color: #fff; }
+  [data-skin="retro"] .steps .step-open .step-num { background: radial-gradient(circle at 35% 30%, #fff08a, #e0b420 60%, #8a6400); border-color: #6b4a00; color: #3a2a00; }
+
+  /* cards: framed parchment; the picked one becomes a dark plaque */
+  [data-skin="retro"] .pick-card, [data-skin="retro"] .option-card {
+    background: linear-gradient(rgba(255, 250, 235, 0.9), rgba(239, 228, 198, 0.95)), url("../assets/retro/parchment.png");
+    border: 3px double var(--box-border);
+  }
+  [data-skin="retro"] .pick-card:hover, [data-skin="retro"] .option-card:hover { background: #fff3c4; border-color: #8b0000; }
+  [data-skin="retro"] .pick-card.selected, [data-skin="retro"] .option-card.selected {
+    background: url("../assets/retro/frames/plaque.svg") center / 100% 100% no-repeat; border: 3px solid transparent; color: #f3e2b8;
+  }
+  [data-skin="retro"] .pick-card.selected .pick-name, [data-skin="retro"] .option-card.selected .option-name { color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
+  [data-skin="retro"] .pick-card.selected .pick-name::before, [data-skin="retro"] .option-card.selected .option-name::before { color: #f0cf6a; }
+  [data-skin="retro"] .pick-card.selected :is(.pick-sub, .option-text, .muted), [data-skin="retro"] .option-card.selected :is(.option-text, .muted, p) { color: #f3e2b8; }
+  [data-skin="retro"] .chip.selected { background: linear-gradient(#7a1414, #3d0606); border: 2px solid #b8962e; color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
+
+  /* character summary: ability crests */
+  [data-skin="retro"] .live-summary .scores { gap: 6px 4px; }
+  [data-skin="retro"] .live-summary .scores div { display: flex; flex-direction: column; align-items: center; padding: 0; background: none; border: 0; }
+  [data-skin="retro"] .live-summary .scores dt { margin: 0 0 2px; padding: 0; background: none; border: 0; font: 12px/1.2 var(--label); color: #7a0e0e; text-transform: none; }
+  [data-skin="retro"] .live-summary .scores dd {
+    display: flex; flex-direction: column; align-items: center; gap: 4px; width: 56px; height: 66px; padding-top: 11px;
+    background: url("../assets/retro/frames/crest.svg") center / 56px 66px no-repeat;
+  }
+  [data-skin="retro"] .live-summary .scores dd span { order: 1; font: bold 22px/1 var(--serif); color: #7a0e0e; }
+  [data-skin="retro"] .live-summary .scores dd strong {
+    order: 2; min-width: 26px; padding: 0 5px; text-align: center; font: bold 11px/1.4 var(--serif); color: #000;
+    background: #fff; border: 1px solid #7a0e0e; border-radius: 50% !important;
+  }
+
+  /* character summary: heart, shield and plaques */
+  [data-skin="retro"] .live-summary .vitals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  [data-skin="retro"] .live-summary .vitals div {
+    display: flex; flex-direction: column-reverse; align-items: center; justify-content: center; gap: 2px;
+    padding: 6px 4px; border: 0; background: url("../assets/retro/frames/plaque.svg") center / 100% 100% no-repeat;
+  }
+  [data-skin="retro"] .live-summary .vitals div dt { font: 11px/1.2 var(--label); color: #f3e2b8; text-align: center; }
+  [data-skin="retro"] .live-summary .vitals div dd { font: bold 18px/1.1 var(--serif); color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
+  [data-skin="retro"] .live-summary .vitals div:nth-child(-n+2) { background: none; padding: 0; }
+  [data-skin="retro"] .live-summary .vitals div:nth-child(-n+2) dt { color: #7a0e0e; }
+  [data-skin="retro"] .live-summary .vitals div:nth-child(1) dd {
+    display: grid; place-items: center; width: 80px; height: 69px; padding-bottom: 8px;
+    background: url("../assets/retro/frames/heart.svg") center / 80px 69px no-repeat; color: #fff; text-shadow: 1px 1px 0 #000; font-size: 22px;
+  }
+  [data-skin="retro"] .live-summary .vitals div:nth-child(2) dd {
+    display: grid; place-items: center; width: 62px; height: 72px; padding-top: 16px;
+    background: url("../assets/retro/frames/shield.svg") center / 62px 72px no-repeat; color: #3d0404; text-shadow: none; font-size: 22px;
+  }
+  [data-skin="retro"] .live-summary .vitals div:nth-child(2) small { display: none; }
+
+  /* ability-scores step: final score on a small plaque, modifier in an oval */
+  [data-skin="retro"] .score-table td.score-final {
+    background: url("../assets/retro/frames/plaque.svg") center / 52px 34px no-repeat; color: #f0cf6a; text-shadow: 1px 1px 0 #000;
+  }
+  [data-skin="retro"] .score-table td.score-final + td { font: bold 14px var(--serif); }
+
+  /* review: abilities as six crests, combat numbers as heart, shield and plaques */
+  [data-skin="retro"] .review-grid .mini-table, [data-skin="retro"] .review-grid .mini-table tbody { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 4px; border: 0; }
+  [data-skin="retro"] .review-grid .mini-table tbody { grid-column: 1 / -1; }
+  [data-skin="retro"] .review-grid .mini-table tr {
+    display: grid; grid-template-areas: "name" "crest" "save"; justify-items: center; background: none !important;
+  }
+  [data-skin="retro"] .review-grid .mini-table tr::before {
+    content: ""; grid-area: crest; width: 60px; height: 71px; background: url("../assets/retro/frames/crest.svg") center / 60px 71px no-repeat;
+  }
+  [data-skin="retro"] .review-grid .mini-table :is(th, td) { padding: 0; border: 0; background: none; text-align: center; }
+  [data-skin="retro"] .review-grid .mini-table th { grid-area: name; font: 14px var(--label); color: #7a0e0e; }
+  [data-skin="retro"] .review-grid .mini-table td:nth-of-type(2) { grid-area: crest; align-self: start; margin-top: 14px; font: bold 24px/1 var(--serif); color: #7a0e0e; }
+  [data-skin="retro"] .review-grid .mini-table td:nth-of-type(1) {
+    grid-area: crest; align-self: start; margin-top: 46px; min-width: 28px; padding: 0 5px; font: bold 12px/1.4 var(--serif);
+    background: #fff; border: 1px solid #7a0e0e; border-radius: 50% !important;
+  }
+  [data-skin="retro"] .review-grid .mini-table td:nth-of-type(3) { grid-area: save; font-size: 12px; }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div {
+    display: flex; flex-direction: column-reverse; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px;
+    background: url("../assets/retro/frames/plaque.svg") center / 100% 100% no-repeat;
+  }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts dt { color: #f3e2b8; font: 12px var(--label); }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts dd { color: #f0cf6a; font: bold 20px/1.1 var(--serif); text-shadow: 1px 1px 0 #000; }
+}
+@media screen {
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div:is(:nth-child(1), :nth-child(3)) { background: none; padding: 0; }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div:is(:nth-child(1), :nth-child(3)) dt { color: #7a0e0e; }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div:nth-child(1) dd {
+    display: grid; place-items: center; width: 84px; height: 73px; padding-bottom: 8px;
+    background: url("../assets/retro/frames/heart.svg") center / 84px 73px no-repeat; color: #fff;
+  }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div:nth-child(3) dd {
+    display: grid; place-items: center; width: 64px; height: 74px; padding-top: 16px; color: #3d0404; text-shadow: none;
+    background: url("../assets/retro/frames/shield.svg") center / 64px 74px no-repeat;
+  }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div:nth-child(3) dd small { display: none; }
+  [data-skin="retro"] .review-grid section:nth-child(2) .facts > div:not(:nth-child(1), :nth-child(3)) { align-self: center; min-height: 58px; }
+}
+@media screen and (min-width: 761px) and (max-width: 1100px) {
+  /* summary sits above the step here, so its heart, shield and plaques go in one row */
+  [data-skin="retro"] .live-summary .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; }
+}
