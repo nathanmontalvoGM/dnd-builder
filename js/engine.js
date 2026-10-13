@@ -478,9 +478,12 @@ function queryOptions(ctx, q, scope) {
   }
   if (q.pool === "feats") {
     const taken = new Set(out.feats.map(f => f.id));
+    // 2024 rules: a General feat slot (levels 4, 8, 12, 16) can take any feat you qualify for,
+    // which includes Origin feats. A list of categories is also accepted.
+    const cats = !q.category ? null : q.category === "general" ? ["general", "origin"] : [].concat(q.category);
     return {
       options: Object.entries(pack.feats ?? {})
-        .filter(([, f]) => !q.category || f.category === q.category)
+        .filter(([, f]) => !cats || cats.includes(f.category))
         .sort(([, a], [, b]) => a.name.localeCompare(b.name))
         .map(([id, f]) => ({
           value: id, label: f.name, text: f.text, link: `#/feats/${id}`,
