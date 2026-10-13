@@ -8,6 +8,11 @@
   <link rel="preload" href="assets/fonts/Scaly-Sans.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="css/retro.css">
+  <script>
+    // Apply the saved site style before the page paints, so there's no flash of the other skin.
+    try { document.documentElement.dataset.skin = localStorage.getItem("character-builder:skin") === "retro" ? "retro" : "modern"; } catch (e) {}
+  </script>
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -23,6 +28,12 @@
       <button type="button" class="btn" id="btn-load">Load new pack</button>
       <button type="button" class="btn btn-quiet" id="btn-remove">Remove pack</button>
     </div>
+    <label class="skin-pick">Site style
+      <select id="skin-select" aria-label="Site style">
+        <option value="modern">Modern</option>
+        <option value="retro">2002</option>
+      </select>
+    </label>
   </header>
 
   <main id="app"></main>
@@ -30,10 +41,37 @@
   <footer class="site-foot">
     <p>This builder is a fan-made work and is not affiliated with Wizards of the Coast. Dungeons &amp; Dragons, D&amp;D, Wizards of the Coast and their logos are trademarks of Wizards of the Coast in the USA and other countries.</p>
     <p>Fonts: remakes from <a href="https://github.com/naturalcrit/homebrewery" target="_blank" rel="noopener">The Homebrewery</a>. <a href="assets/fonts/LICENSE.md" target="_blank" rel="noopener">Font credits</a></p>
+    <p class="modern-only skin-links">Site style: <button type="button" data-skin-set="modern">Modern</button> or <button type="button" data-skin-set="retro">2002</button></p>
+    <div class="retro-only">
+      <p>Best viewed at 1024&times;768 in any browser. Last updated: <span id="last-updated"></span></p>
+      <p aria-hidden="true">
+        <span class="badge-88 b1">D&amp;D 2024<br>BUILDER</span>
+        <span class="badge-88 b2">MADE WITH<br>OBSIDIAN</span>
+        <span class="badge-88 b3">NO FRAMES<br>NO ADS</span>
+      </p>
+    </div>
   </footer>
 
   <input type="file" id="file-input" accept=".json,application/json" hidden>
   <div class="drop-overlay" id="drop-overlay" hidden><p>Drop a content pack or character file</p></div>
   <div class="toast" id="toast" role="status" hidden></div>
+  <script>
+    // Site style switch (Modern or 2002), remembered per browser.
+    (function () {
+      var sel = document.getElementById("skin-select");
+      var links = document.querySelectorAll("[data-skin-set]");
+      function setSkin(v) {
+        document.documentElement.dataset.skin = v;
+        sel.value = v;
+        links.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.skinSet === v)); });
+        try { localStorage.setItem("character-builder:skin", v); } catch (e) {}
+      }
+      setSkin(document.documentElement.dataset.skin === "retro" ? "retro" : "modern");
+      sel.addEventListener("change", function () { setSkin(sel.value); });
+      links.forEach(function (b) { b.addEventListener("click", function () { setSkin(b.dataset.skinSet); }); });
+      var d = new Date(document.lastModified);
+      document.getElementById("last-updated").textContent = isNaN(d) ? "recently" : d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    })();
+  </script>
 </body>
 </html>
