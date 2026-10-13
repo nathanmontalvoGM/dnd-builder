@@ -31,7 +31,7 @@
 [data-skin="retro"] *, [data-skin="retro"] *::before, [data-skin="retro"] *::after {
   border-radius: 0 !important; box-shadow: none !important; transition: none !important; animation: none !important;
 }
-[data-skin="retro"] .pip, [data-skin="retro"] .step-num { border-radius: 50% !important; }
+[data-skin="retro"] .step-num { border-radius: 50% !important; }
 
 /* ---------- page frame ---------- */
 [data-skin="retro"] { background: #1c140e url("../assets/retro/stone.png"); }
@@ -58,9 +58,6 @@
 }
 [data-skin="retro"] .brand-gif { display: block; height: 72px; width: auto; image-rendering: pixelated; }
 [data-skin="retro"] .brand-gif.flip { transform: scaleX(-1); } /* the right-hand dragon faces the title */
-[data-skin="retro"] .brand-tag {
-  display: block; margin-top: 6px; font: italic 12px var(--serif); letter-spacing: 0; color: #e6d7b0; text-shadow: 1px 1px 0 #000;
-}
 
 /* left nav column */
 [data-skin="retro"] .topnav { grid-area: nav; display: block; margin: 0; padding: 10px 0 0; }
@@ -176,8 +173,25 @@
   border: 1px solid var(--box-border); background: #fffaf0;
 }
 [data-skin="retro"] .chip.selected, [data-skin="retro"] .pick-card.selected, [data-skin="retro"] .option-card.selected { background: #f6e7b4; border: 2px solid #8b0000; }
-[data-skin="retro"] .pip { border-color: #8b0000; }
-[data-skin="retro"] .pip.used { background: #8b0000; border-color: #4d0606; }
+/* pips become old-style checkboxes: a white inset square, ticked when used */
+[data-skin="retro"] .pips { gap: 3px; }
+[data-skin="retro"] .pip {
+  position: relative; width: 14px; height: 14px; padding: 0;
+  background: #fff; border: 2px inset #d4d0c8; cursor: pointer;
+}
+[data-skin="retro"] .pip:hover { background: #fffbe0; outline: 1px dotted #000; outline-offset: 1px; }
+[data-skin="retro"] .pip.used { background: #fff; border-color: #a0998a; }
+[data-skin="retro"] .pip.used::after {
+  content: ""; position: absolute; left: 3px; top: 0; width: 4px; height: 8px;
+  border: solid #000; border-width: 0 2px 2px 0; transform: rotate(40deg);
+}
+[data-skin="retro"] .death .pip.used::after { border-color: #8b0000; }
+[data-skin="retro"] .resource-list { gap: 0; }
+[data-skin="retro"] .resource-list > li { padding: 3px 6px; border-bottom: 1px dotted #c8b58a; font: 12px/1.5 var(--sans); }
+[data-skin="retro"] .resource-list > li:nth-child(even) { background: #f3ead2; }
+[data-skin="retro"] .resource-list > li:last-child { border-bottom: 0; }
+[data-skin="retro"] .res-name { font-weight: bold; }
+[data-skin="retro"] .res-note { font-size: 11px; }
 [data-skin="retro"] .hp-bar { height: 8px; border: 1px solid #000; background: #3a0000; }
 [data-skin="retro"] .hp-bar span { background: linear-gradient(#5fd35f, #1b8a1b); }
 
@@ -321,7 +335,7 @@
 
 /* Pieces of the old-web footer only appear in the 2002 skin. */
 .retro-only { display: none; }
-.brand-gif, .brand-tag { display: none; }
+.brand-gif { display: none; }
 /* The header dropdown lives in the 2002 sidebar; the modern skin uses the footer links instead. */
 .skin-pick { display: none; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--muted); }
 [data-skin="retro"] .modern-only { display: none; }
