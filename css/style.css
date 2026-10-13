@@ -746,3 +746,33 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
   .sheet-grid:not(.has-abil), .sheet-grid:not(.has-main) { grid-template-columns: minmax(0, 1fr); }
 }
 @media print { .hide-btn, .layout-banner { display: none !important; } }
+
+/* ---------- sheet header buttons ----------
+   Character tools sit under the name as a quiet toolbar; play actions (rests) are one joined
+   control on the right; Save is the only solid button. */
+.btn-icon { flex: none; }
+.sheet-head .btn { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+.sheet-tools { display: flex; flex-wrap: wrap; gap: 0.15rem 0.35rem; margin: 0.6rem 0 0 -0.55rem; }
+.tool-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font: 500 0.95rem/1 var(--sans); color: var(--verdigris);
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+  padding: 0.4rem 0.55rem; cursor: pointer;
+}
+.tool-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--rule); color: var(--ink); }
+.tool-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.sheet-actions { align-items: center; }
+.rest-group { display: inline-flex; }
+.rest-group .btn { border-radius: 0; }
+.rest-group .btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.rest-group .btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-left: -1px; }
+.rest-group .btn:hover { position: relative; z-index: 1; }
+.save-btn { min-width: 8.5rem; justify-content: center; }
+
+@media print { .sheet-tools { display: none !important; } }
+@media (max-width: 760px) {
+  .sheet-actions { width: 100%; }
+  .sheet-tools { margin-left: 0; }
+}

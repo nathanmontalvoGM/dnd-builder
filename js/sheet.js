@@ -155,6 +155,18 @@ function featureGroup(f, snapshot) {
 
 const rechargeLabel = r => ({ short: "short rest", long: "long rest", dawn: "dawn" })[r] ?? r;
 
+// Small line icons for the header buttons; they take the button's text color.
+const icon = d => `<svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICONS = {
+  levelup: icon('<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>'),
+  edit: icon('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>'),
+  layout: icon('<rect x="3" y="4" width="7" height="7" rx="1"/><rect x="14" y="4" width="7" height="7" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 17.5h7"/>'),
+  pdf: icon('<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>'),
+  short: icon('<circle cx="12" cy="13" r="7"/><path d="M12 9v4l2.5 2"/><path d="M9 3h6"/>'),
+  long: icon('<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'),
+  save: icon('<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/>'),
+};
+
 // ---------- hiding (Edit layout) ----------
 // Every hideable element has a stable id kept in play.hidden. In the normal view (and the PDF) a hidden
 // element isn't rendered at all; in Edit layout mode it's shown dimmed with a Show button.
@@ -284,16 +296,20 @@ function render() {
       <div class="sheet-id">
         <h1>${esc(f.details?.name || "Unnamed character")}</h1>
         <p>${esc([`Level ${s.level} ${classText}`, species?.name, bg?.name, f.details?.alignment].filter(Boolean).join(", "))}</p>
+        ${editing() ? "" : `<div class="sheet-tools" role="toolbar" aria-label="Character tools">
+          <button type="button" class="tool-btn" data-levelup ${s.level >= 20 ? "disabled" : ""}>${ICONS.levelup}Level up</button>
+          <button type="button" class="tool-btn" data-edit-build>${ICONS.edit}Edit in builder</button>
+          <button type="button" class="tool-btn" data-layout aria-pressed="false">${ICONS.layout}Edit layout</button>
+          <button type="button" class="tool-btn" data-print>${ICONS.pdf}Export PDF</button>
+        </div>`}
       </div>
       <div class="sheet-actions">
         ${editing() ? `<button type="button" class="btn btn-primary" data-layout aria-pressed="true">Done editing layout</button>` : `
-        <button type="button" class="btn" data-levelup ${s.level >= 20 ? "disabled" : ""}>Level up</button>
-        <button type="button" class="btn" data-edit-build>Edit in builder</button>
-        <button type="button" class="btn" data-layout aria-pressed="false">Edit layout</button>
-        <button type="button" class="btn" data-print>Export PDF</button>
-        <button type="button" class="btn" data-rest="short">Short rest</button>
-        <button type="button" class="btn" data-rest="long">Long rest</button>
-        <button type="button" class="btn btn-primary" data-save>${state.dirty ? "Save file" : "Saved"}</button>
+        <div class="rest-group" role="group" aria-label="Rest">
+          <button type="button" class="btn" data-rest="short">${ICONS.short}Short rest</button>
+          <button type="button" class="btn" data-rest="long">${ICONS.long}Long rest</button>
+        </div>
+        <button type="button" class="btn btn-primary save-btn" data-save>${ICONS.save}${state.dirty ? "Save file" : "Saved"}</button>
         <button type="button" class="btn btn-quiet" data-close>Close</button>`}
       </div>
     </header>
@@ -630,7 +646,7 @@ export function saveCharacterFile() {
 
 function updateSaveState() {
   const btn = root?.querySelector("[data-save]");
-  if (btn) btn.textContent = state.dirty ? "Save file" : "Saved";
+  if (btn) btn.innerHTML = `${ICONS.save}${state.dirty ? "Save file" : "Saved"}`;
 }
 
 // ---------- events ----------
