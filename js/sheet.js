@@ -543,19 +543,28 @@ function renderFeatures(s, p, f) {
       ${closed ? "" : body}
     </div>`;
   };
+  // A group's rows split into two independent lists (first half, second half) that sit side by side
+  // on a wide screen, so opening a feature only pushes down its own column.
+  const rowLists = rows => {
+    rows = rows.filter(Boolean);
+    if (!rows.length) return "";
+    const half = Math.ceil(rows.length / 2);
+    return `<div class="feature-cols"><ul class="feature-rows">${rows.slice(0, half).join("")}</ul>${rows.length > 1 ? `<ul class="feature-rows">${rows.slice(half).join("")}</ul>` : ""}</div>`;
+  };
   const out = [];
   for (const [key, g] of groups) {
     if (key === "feats") {
       const extra = g.items.filter(x => !featFeatureNames.has(x.name)); // a feat's own feature repeats the feat
       const n = featEntries.length + extra.length;
       if (!n) continue;
-      out.push(section(key, g.title, null, n, `<ul class="feature-rows">${featEntries.map(x =>
-        row(`feat:${x.key}`, x.name, `from ${x.source}`, `${(() => { const ff = g.items.find(i => i.name === x.name); return ff ? featureBody({ ...ff, text: "" }) : ""; })()}${md(strip(x.entry?.text))}`, featureChips(g.items.find(i => i.name === x.name) ?? {}))).join("")}
-        ${extra.map(x => row(`f:${x.key}`, x.name, x.source, featureBody(x), featureChips(x))).join("")}</ul>`));
+      out.push(section(key, g.title, null, n, rowLists([
+        ...featEntries.map(x => row(`feat:${x.key}`, x.name, `from ${x.source}`, `${(() => { const ff = g.items.find(i => i.name === x.name); return ff ? featureBody({ ...ff, text: "" }) : ""; })()}${md(strip(x.entry?.text))}`, featureChips(g.items.find(i => i.name === x.name) ?? {}))),
+        ...extra.map(x => row(`f:${x.key}`, x.name, x.source, featureBody(x), featureChips(x))),
+      ])));
       continue;
     }
     if (!g.items.length) continue;
-    out.push(section(key, g.title, g.sub, g.items.length, `<ul class="feature-rows">${g.items.map(x => row(`f:${x.key}`, x.name, where(x, key), featureBody(x), featureChips(x))).join("")}</ul>`));
+    out.push(section(key, g.title, g.sub, g.items.length, rowLists(g.items.map(x => row(`f:${x.key}`, x.name, where(x, key), featureBody(x), featureChips(x))))));
   }
   return hz("panel:features", "Features and traits", "panel features-panel", `<div class="panel-head"><h2>Features and traits</h2>
       <span class="panel-tools"><button type="button" class="link-btn" data-groups="open">Expand all</button> · <button type="button" class="link-btn" data-groups="close">Collapse all</button></span></div>

@@ -595,14 +595,12 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 
 .spells-panel { margin-top: 1.25rem; }
 
-/* Features and traits run full width under the columns. On a wide screen each group's rows sit
-   two to a line (left to right, in level order); an opened feature takes the whole line so its
-   rules text stays readable. */
+/* Features and traits run full width under the columns. On a wide screen each group splits into
+   two side-by-side lists (first half on the left, in level order); an opened feature stays in its
+   own column and only pushes that column down. */
 .sheet > .features-panel { margin-top: 1.25rem; }
 @media screen and (min-width: 900px) {
-  .features-panel .feature-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.5rem; }
-  .features-panel .feature-rows > li:nth-last-child(2):nth-child(odd) { border-bottom: 0; }
-  .features-panel .feature-rows > li.open { grid-column: 1 / -1; }
+  .features-panel .feature-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.5rem; align-items: start; }
   .features-panel .feature-body { max-width: 52rem; }
 }
 .spell-stats { display: flex; flex-wrap: wrap; gap: 0.5rem 1.75rem; margin-bottom: 0.75rem; }

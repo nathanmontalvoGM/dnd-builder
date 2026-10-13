@@ -454,7 +454,8 @@
     display: inline-grid; place-items: center; flex: none; width: 15px; height: 15px; margin-left: 8px;
     font: bold 12px/1 var(--sans); color: #000; background: linear-gradient(#fffef9, #e8dfc6); border: 1px solid #8a7a5a;
   }
-  [data-skin="retro"] .features-panel .feature-rows { margin: 0; border: 1px solid #d8c7a0; border-top: 0; }
+  [data-skin="retro"] .features-panel .feature-cols { border: 1px solid #d8c7a0; border-top: 0; }
+  [data-skin="retro"] .features-panel .feature-rows { margin: 0; }
   [data-skin="retro"] .features-panel .feature-rows > li { padding: 0 8px; border-bottom: 1px dotted #c8b58a; }
   [data-skin="retro"] .features-panel .feature-toggle { flex-wrap: nowrap; align-items: flex-start; gap: 10px; padding: 6px 0; }
   [data-skin="retro"] .features-panel .feature-toggle > span:first-child {
@@ -473,13 +474,10 @@
   [data-skin="retro"] .features-panel .feature-body { padding: 2px 4px 10px; border-top: 1px dashed #d8c7a0; }
 }
 @media screen and (min-width: 900px) {
-  /* two to a line, with a dotted rule between the columns (no striping: an opened feature
-     shifts every later row to the other column, which would scramble the stripes) */
-  [data-skin="retro"] .features-panel .feature-rows { column-gap: 0; }
-  [data-skin="retro"] .features-panel .feature-rows > li { border-bottom: 1px solid #d8c7a0; }
-  [data-skin="retro"] .features-panel .feature-rows > li:nth-child(even):not(.open) { border-left: 1px dotted #c8b58a; }
-  [data-skin="retro"] .features-panel .feature-rows > li.open { background: #fffdf4; }
-}
-@media screen and (max-width: 899px) {
+  /* two independent columns with a dotted rule between them; each column striped on its own */
+  [data-skin="retro"] .features-panel .feature-cols { column-gap: 0; }
+  [data-skin="retro"] .features-panel .feature-rows + .feature-rows { border-left: 1px dotted #c8b58a; }
   [data-skin="retro"] .features-panel .feature-rows > li:nth-child(even) { background: #f3ead2; }
+  [data-skin="retro"] .features-panel .feature-rows > li.open { background: #fffdf4; }
+  [data-skin="retro"] .features-panel .feature-rows > li:last-child { border-bottom: 0; }
 }
