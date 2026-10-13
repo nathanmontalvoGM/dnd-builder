@@ -433,3 +433,53 @@
 .badge-88.b1 { background: linear-gradient(#5a0a0a, #2a0303); color: #f0cf6a; }
 .badge-88.b2 { background: linear-gradient(#e6e6e6, #9a9a9a); color: #000; }
 .badge-88.b3 { background: linear-gradient(#1f3d6b, #0b1830); color: #fff; }
+
+/* ---------- Features and traits: clearer groups and rows ----------
+   Each group gets a tan header strip; rows are striped, the feature name leads, its numbers sit on
+   a second line, the level is a small right-hand note, and the expand sign is a little [+] box. */
+@media screen {
+  [data-skin="retro"] .features-panel .feature-group { border-top: 0; margin-top: 10px; }
+  [data-skin="retro"] .features-panel .feature-group:first-of-type { margin-top: 0; }
+  [data-skin="retro"] .features-panel .group-toggle {
+    align-items: center; padding: 4px 8px; background: #e8d7a8; border: 1px solid var(--box-border);
+  }
+  [data-skin="retro"] .features-panel .group-toggle:hover { background: #f0e2b8; }
+  [data-skin="retro"] .features-panel .group-title { font-size: 19px; color: var(--heading); }
+  [data-skin="retro"] .features-panel .group-sub { font: 14px var(--sans); color: #3a2a1a; }
+  [data-skin="retro"] .features-panel .group-toggle > .muted {
+    font: 12px/1.4 var(--sans); color: #3a2a1a; background: #fbf6e6; border: 1px solid var(--box-border); padding: 0 6px;
+  }
+  [data-skin="retro"] .features-panel .group-toggle::after,
+  [data-skin="retro"] .features-panel .feature-toggle::after {
+    display: inline-grid; place-items: center; flex: none; width: 15px; height: 15px; margin-left: 8px;
+    font: bold 12px/1 var(--sans); color: #000; background: linear-gradient(#fffef9, #e8dfc6); border: 1px solid #8a7a5a;
+  }
+  [data-skin="retro"] .features-panel .feature-rows { margin: 0; border: 1px solid #d8c7a0; border-top: 0; }
+  [data-skin="retro"] .features-panel .feature-rows > li { padding: 0 8px; border-bottom: 1px dotted #c8b58a; }
+  [data-skin="retro"] .features-panel .feature-toggle { flex-wrap: nowrap; align-items: flex-start; gap: 10px; padding: 6px 0; }
+  [data-skin="retro"] .features-panel .feature-toggle > span:first-child {
+    flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px;
+    font-size: 15px; color: #1a0a04;
+  }
+  [data-skin="retro"] .features-panel .feature-toggle .chips { flex-basis: 100%; margin: 0; gap: 4px; }
+  [data-skin="retro"] .features-panel .chip-sm { font-size: 11px; padding: 0 5px; background: #fff3c4; border-color: #b8962e; }
+  [data-skin="retro"] .features-panel .feature-toggle > .muted {
+    flex: none; max-width: 45%; text-align: right; font-size: 12px; line-height: 1.3; color: #7a6a52; padding-top: 3px;
+  }
+  [data-skin="retro"] .features-panel .feature-toggle::after { margin-top: 2px; }
+  [data-skin="retro"] .features-panel .feature-toggle:hover > span:first-child { color: #8b0000; text-decoration: underline; }
+  [data-skin="retro"] .features-panel .feature-row.open { background: #fffdf4; }
+  [data-skin="retro"] .features-panel .feature-row.open > .feature-toggle > span:first-child { color: #8b0000; }
+  [data-skin="retro"] .features-panel .feature-body { padding: 2px 4px 10px; border-top: 1px dashed #d8c7a0; }
+}
+@media screen and (min-width: 900px) {
+  /* two to a line, with a dotted rule between the columns (no striping: an opened feature
+     shifts every later row to the other column, which would scramble the stripes) */
+  [data-skin="retro"] .features-panel .feature-rows { column-gap: 0; }
+  [data-skin="retro"] .features-panel .feature-rows > li { border-bottom: 1px solid #d8c7a0; }
+  [data-skin="retro"] .features-panel .feature-rows > li:nth-child(even):not(.open) { border-left: 1px dotted #c8b58a; }
+  [data-skin="retro"] .features-panel .feature-rows > li.open { background: #fffdf4; }
+}
+@media screen and (max-width: 899px) {
+  [data-skin="retro"] .features-panel .feature-rows > li:nth-child(even) { background: #f3ead2; }
+}
