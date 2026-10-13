@@ -268,11 +268,12 @@ function render() {
     renderClassStats(s),
     hz("panel:yournotes", "Your notes", "panel", `<h2><label for="char-notes">Your notes</label></h2>
       ${box(`<textarea id="char-notes" rows="14" data-play="characterNotes" data-focus="char-notes" placeholder="Reminders, combos, tactics, anything you want handy during play">${esc(p.characterNotes)}</textarea>`, p.characterNotes)}`, "section"),
-    renderResources(s, p),
-    renderFeatures(s, p, f),
   ].join("");
 
+  // Limited uses sit at the top of the right-hand column; the long features list gets its own
+  // full-width row under the columns so it doesn't stretch one column far past the others.
   const sideCol = [
+    renderResources(s, p),
     hz("panel:training", "Training", "panel", `<h2>Training</h2>
       <dl class="facts compact one-col">
         <div><dt>Armor</dt><dd>${esc(uniq(s.proficiencies.armor).join(", ") || "None")}</dd></div>
@@ -329,6 +330,8 @@ function render() {
       ${mainCol.trim() ? `<div class="main-col">${mainCol}</div>` : ""}
       ${sideCol.trim() ? `<aside class="side-col">${sideCol}</aside>` : ""}
     </div>
+
+    ${renderFeatures(s, p, f)}
 
     ${renderSpells(s, p, f)}
 
