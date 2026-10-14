@@ -575,8 +575,8 @@
 
   /* Hit points: a heart holding the current HP, temp HP and damage/heal beside it, a vial below */
   [data-skin="retro"] .hp-box {
-    display: grid; grid-template-columns: 124px minmax(0, 1fr); align-items: center; column-gap: 16px; row-gap: 6px;
-    grid-template-areas: "title title" "heart temp" "heart adjust" "bar bar";
+    display: grid; grid-template-columns: 124px minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 6px;
+    grid-template-areas: "title title title" "heart temp insp" "heart adjust adjust" "bar bar bar";
   }
   [data-skin="retro"] .hp-box::before { grid-area: title; }
   [data-skin="retro"] .hp-numbers { display: contents; }
@@ -657,8 +657,6 @@
   [data-skin="retro"] .combat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "hp hp" "ac p1" "ac p2" "p3 p4"; }
 }
 @media screen and (min-width: 761px) {
-  /* the armor box takes one cell so all six trackers fit on one row; its controls wrap */
-  [data-skin="retro"] .armor-box { grid-column: auto; }
   [data-skin="retro"] .armor-box .armor-controls { gap: 4px 10px; }
 }
 
@@ -783,4 +781,21 @@
 @media screen and (min-width: 761px) and (max-width: 1100px) {
   /* summary sits above the step here, so its heart, shield and plaques go in one row */
   [data-skin="retro"] .live-summary .vitals { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; }
+}
+
+/* Heroic Inspiration inside the HP box: a gold-rimmed circle, filled with gold while you have it */
+@media screen {
+  [data-skin="retro"] .hp-box .insp { grid-area: insp; justify-self: end; padding-right: 4px; }
+  [data-skin="retro"] .insp-toggle { gap: 8px; padding: 0; background: none; border: 0; font: 15px/1.2 var(--label); color: #5a4a36; }
+  [data-skin="retro"] .insp-dot {
+    width: 24px; height: 24px; border-radius: 50% !important; border: 3px solid #b8962e; outline: 1px solid #000;
+    background: radial-gradient(circle at 40% 35%, #fffef9, #e8dfc6);
+  }
+  [data-skin="retro"] .insp-toggle:hover .insp-dot { border-color: #e0b420; }
+  [data-skin="retro"] .insp-toggle.on { color: #7a0e0e; }
+  [data-skin="retro"] .insp-toggle.on .insp-dot { background: radial-gradient(circle at 35% 30%, #fff6b0, #e0b420 55%, #8a6400); }
+}
+@media screen and (max-width: 760px) {
+  [data-skin="retro"] .hp-box { grid-template-columns: 124px minmax(0, 1fr); grid-template-areas: "title title" "heart temp" "heart insp" "heart adjust" "bar bar"; }
+  [data-skin="retro"] .hp-box .insp { justify-self: start; }
 }

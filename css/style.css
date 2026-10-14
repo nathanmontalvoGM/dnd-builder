@@ -529,9 +529,17 @@ button.home-card { font: inherit; text-align: left; cursor: pointer; }
 .hp-adjust { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .hp-adjust input { width: 6rem; font: inherit; font-size: 16px; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.35em 0.5em; }
 .hp-adjust .btn { padding: 0.45em 0.7em; }
+/* Heroic Inspiration: a circle in the HP box, filled while you have it */
+.hp-box .insp { justify-self: start; position: relative; }
+.insp-toggle { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.15rem 0; background: none; border: 0; font: inherit; font-size: 0.92rem; color: var(--muted); cursor: pointer; }
+.insp-dot { flex: none; width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 2px solid var(--gilt); background: transparent; }
+.insp-toggle.on { color: var(--ink); }
+.insp-toggle.on .insp-dot { background: var(--gilt); }
+.insp-toggle:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 2px; }
 .hp-bar { height: 5px; border-radius: 99px; background: var(--rule); overflow: hidden; }
 .hp-bar span { display: block; height: 100%; background: var(--verdigris); }
 /* Bloodied (half HP or less) turns the bar yellow; a quarter or less turns it red */
+.hp-bar[data-state="ok"] span { background: #3f8a3a; }
 .hp-bar[data-state="bloodied"] span { background: #c9a227; }
 .hp-bar[data-state="low"] span { background: var(--danger); }
 

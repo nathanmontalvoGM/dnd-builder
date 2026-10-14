@@ -217,6 +217,7 @@ function render() {
             <input type="number" data-play="hp.current" data-focus="hp" value="${p.hp.current}" min="0" max="${hpMax}"><span class="hp-max">/ ${hpMax}</span></label>
           <label class="hp-temp"><span class="label">Temporary</span><input type="number" data-play="hp.temp" data-focus="temp" value="${p.hp.temp}" min="0"></label>
         </div>
+        ${hz("stat:inspiration", "Heroic Inspiration", "insp", `<button type="button" class="insp-toggle${p.inspiration ? " on" : ""}" data-inspiration aria-pressed="${p.inspiration}"><span class="insp-dot" aria-hidden="true"></span>Heroic Inspiration</button>`)}
         <div class="hp-adjust">
           <input type="number" min="0" placeholder="Amount" data-hp-amount data-focus="hp-amount" aria-label="Damage or healing amount">
           <button type="button" class="btn" data-hp="damage">Damage</button>
@@ -233,9 +234,6 @@ function render() {
         <span class="label">Death saves</span>
         <span class="death"><span>Success</span>${pips(3, p.deathSaves.success, 'data-death="success"', "Death save success")}</span>
         <span class="death"><span>Fail</span>${pips(3, p.deathSaves.fail, 'data-death="fail"', "Death save failure")}</span>`),
-    hz("stat:inspiration", "Heroic Inspiration", "stat-box tracker-box", `
-        <span class="label">Heroic Inspiration</span>
-        <button type="button" class="toggle ${p.inspiration ? "on" : ""}" data-inspiration aria-pressed="${p.inspiration}">${p.inspiration ? "Have it" : "None"}</button>`),
     hz("stat:exhaustion", "Exhaustion", "stat-box tracker-box", `
         <span class="label">Exhaustion</span>
         <span class="stepper"><button type="button" class="step-btn" data-exh="-1" ${exh <= 0 ? "disabled" : ""} aria-label="Remove a level of exhaustion">−</button>
