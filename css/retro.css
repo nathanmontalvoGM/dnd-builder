@@ -842,3 +842,4 @@
   [data-skin="retro"] .cond-option.on strong { color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
   [data-skin="retro"] .cond-option.on span { color: #f3e2b8; opacity: 1; }
 }
+@media screen { [data-skin="retro"] .exh-dead { color: #a00000 !important; font-weight: bold; } }

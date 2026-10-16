@@ -858,3 +858,4 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
   .cond-pop { left: 0.5rem; right: 0.5rem; width: auto; }
 }
 @media print { .cond-add, .cond-none { display: none !important; } .conditions-bar:not(:has(.cond-chip)) { display: none; } }
+.exh-dead { color: var(--danger) !important; font-weight: 700; }

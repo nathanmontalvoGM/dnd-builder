@@ -259,7 +259,7 @@ function render() {
         <span class="stepper"><button type="button" class="step-btn" data-exh="-1" ${exh <= 0 ? "disabled" : ""} aria-label="Remove a level of exhaustion">−</button>
           <strong>${exh}</strong>
           <button type="button" class="step-btn" data-exh="1" ${exh >= 6 ? "disabled" : ""} aria-label="Add a level of exhaustion">+</button></span>
-        ${exh ? `<small>−${2 * exh} to d20 tests</small>` : ""}`),
+        ${exh >= 6 ? `<small class="exh-dead">Level 6: the character dies</small>` : exh ? `<small>−${2 * exh} to d20 tests, −${5 * exh} ft Speed</small>` : ""}`),
     hz("stat:armor", "Armor and AC", "stat-box armor-box", `
         <span class="label">Armor and AC</span>
         <div class="armor-controls">
