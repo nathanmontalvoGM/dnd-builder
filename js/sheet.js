@@ -3,7 +3,8 @@
 // Only `play` (HP, used slots, gear, notes) changes here; the build is read-only.
 import { summarize, resolve, normalizeBuild, mergeContent, snapshotFor, titleCase } from "./engine.js";
 import { esc, md } from "./render.js";
-import { itemLine, describeItemEffects, needsAttunement, customEntry, EFFECTS, effectDef, newEffect, DAMAGE_TYPES, SKILL_NAMES } from "./items.js";
+import { itemLine, describeItemEffects, needsAttunement, customEntry, EFFECTS, effectDef, newEffect, DAMAGE_TYPES, SKILL_NAMES,
+  ITEM_TYPES, RARITIES, rarityRank, EFFECT_KINDS, itemEffectKinds, itemPrice, canAttune } from "./items.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal, CONDITIONS, CONDITION_NAMES } from "./rules.js";
 
 const OPEN_KEY = "character-builder:sheet";
@@ -13,7 +14,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -206,6 +207,7 @@ function hz(id, label, cls, inner, tag = "div") {
 function render() {
   if (!root || !state) return;
   const focusId = document.activeElement?.dataset?.focus;
+  const pickerScroll = root.querySelector(".ip-results")?.scrollTop;
   const f = state.file;
   const s = computed();
   const p = f.play;
@@ -364,6 +366,7 @@ function render() {
 
     ${renderSpells(s, p, f)}
     ${ui.condPicker && !ui.printing ? renderConditionPicker(conds) : ""}
+    ${ui.itemPicker && !ui.printing ? renderItemPicker(s, p, f) : ""}
 
     ${hz("panel:notes", "Notes", "panel notes-panel", `
       <h2>Notes</h2>
@@ -374,9 +377,10 @@ function render() {
     <p class="sheet-foot muted">${!ui.layout && !ui.printing && hiddenCount ? `${hiddenCount} item${hiddenCount === 1 ? " is" : "s are"} hidden. <button type="button" class="link-btn" data-layout>Edit layout</button> to bring ${hiddenCount === 1 ? "it" : "them"} back. ` : ""}Built with content pack ${esc(f.pack?.version ?? "unknown")}. Last saved ${f.updated ? new Date(f.updated).toLocaleString() : "never"}.</p>
   </article>`;
 
+  if (ui.itemPicker && !ui.printing) setupItemPicker(pickerScroll);
   if (focusId) {
     const el = root.querySelector(`[data-focus="${CSS.escape(focusId)}"]`);
-    if (el) el.focus();
+    if (el) el.focus({ preventScroll: !!ui.itemPicker });
   }
 }
 
@@ -583,37 +587,199 @@ function renderConditionPicker(conds) {
   </div>`;
 }
 
-// The magic item search: every word has to match the name, rarity or type ("rare ring", "flame").
-// Filters the list in place rather than re-rendering, so typing keeps its focus.
-// Words match from their start, so "ring" finds rings but not "Bag of Devouring".
-const ITEM_RESULTS = 40;
+// ---------- the magic item picker ----------
+// A window over the whole pack: search at the top, quick type and rarity filters, and an Advanced
+// section (attunement, what it does on the sheet, source, price, sort). It's drawn from ui.itemFilter
+// once; typing and filtering then show and hide rows in place, so the search box keeps its focus.
+const newItemFilter = () => ({ q: "", types: [], rarities: [], attune: "any", mine: false, effects: [], rules: false, source: "", maxPrice: "", inText: false, sort: "name", open: [], added: null });
 const searchText = s => ` ${String(s).toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9+]+/g, " ").trim()}`;
-function filterItems(input) {
-  const list = input.parentElement.querySelector("[data-item-results]");
-  const words = searchText(input.value).split(" ").filter(Boolean);
+const SOURCE_NAMES = { DMG24: "Dungeon Master's Guide (2024)", PHB24: "Player's Handbook (2024)", MM25: "Monster Manual (2025)", EFA: "Eberron: Forge of the Artificer",
+  FRHoF: "Forgotten Realms: Heroes of Faerûn", FRAiF: "Forgotten Realms: Adventures in Faerûn" };
+let textIndex = { pack: null, map: new Map() }; // item id -> its description, for "search descriptions too"
+function itemTextIndex() {
+  if (textIndex.pack !== loadedPack) textIndex = { pack: loadedPack, map: new Map(Object.entries(loadedPack?.items ?? {}).map(([id, e]) => [id, searchText(`${e.text ?? ""} ${e.base_item ?? ""}`)])) };
+  return textIndex.map;
+}
+const pressed = (on) => `aria-pressed="${on}"`;
+const clip = (text, n) => text.length > n ? `${text.slice(0, n).replace(/[\s,·]+\S*$/, "")} …` : text;
+
+function renderItemPicker(s, p, f) {
+  const F = ui.itemFilter ??= newItemFilter();
+  const entries = Object.entries(loadedPack?.items ?? {}).sort(([, a], [, b]) => a.name.localeCompare(b.name));
+  const owned = new Set((p.items ?? []).map(i => i.ref).filter(Boolean));
+  const classNames = s.classes.map(c => c.name);
+  const speciesName = f.snapshot.species?.[f.build.species]?.name ?? "";
+  const isCaster = !!s.spellcasting;
+  const typesHere = ITEM_TYPES.filter(([k]) => entries.some(([, e]) => e.item_type === k));
+  const raritiesHere = RARITIES.filter(([k]) => entries.some(([, e]) => (e.rarity ?? "varies") === k));
+  const sources = [...new Set(entries.map(([, e]) => e.source).filter(Boolean))].sort((a, b) => (SOURCE_NAMES[a] ?? a).localeCompare(SOURCE_NAMES[b] ?? b));
+  const advCount = advancedCount(F);
+  const rows = entries.map(([id, e]) => {
+    const fx = itemEffectKinds(e);
+    const effects = describeItemEffects(e);
+    const price = itemPrice(e);
+    return `<li class="ip-row" data-id="${esc(id)}" data-type="${esc(e.item_type ?? "")}" data-rarity="${esc(e.rarity ?? "varies")}" data-rank="${rarityRank(e.rarity)}"
+        data-att="${e.attunement ? 1 : 0}" data-mine="${canAttune(e, classNames, speciesName, isCaster) ? 1 : 0}" data-fx=" ${fx.join(" ")} " data-src="${esc(e.source ?? "")}"
+        data-price="${price ?? ""}" data-q="${esc(searchText(`${e.name} ${itemLine(e)} ${effects.join(" ")}`))}">
+      <div class="ip-line">
+        <button type="button" class="ip-name" data-ip-preview="${esc(id)}" aria-expanded="false">
+          <strong>${esc(e.name)}</strong>
+          <span>${esc(itemLine(e))}${e.price && price != null ? ` · ${esc(String(e.price).replace(/^B\+/, "base + "))}` : ""}</span>
+          ${effects.length ? `<small>${esc(clip(effects.join(" · "), 110))}</small>` : ""}
+        </button>
+        ${owned.has(id) ? `<span class="ip-owned">On sheet</span>` : ""}
+        <button type="button" class="btn ip-add" data-item-add="${esc(id)}" data-focus="ip-add:${esc(id)}" aria-label="Add ${esc(e.name)}">Add</button>
+      </div>
+      <div class="ip-detail" hidden></div>
+    </li>`;
+  }).join("");
+  const chip = (attr, key, label, on) => `<button type="button" class="ip-chip" ${attr}="${esc(key)}" ${pressed(on)}>${esc(label)}</button>`;
+  return `<div class="cond-back ip-back" data-ip-back>
+    <div class="cond-modal ip-modal" role="dialog" aria-modal="true" aria-labelledby="ip-title">
+      <h2 id="ip-title">Add a magic item</h2>
+      <div class="ip-controls">
+        <input type="search" class="ip-search" data-ip-q data-focus="ip-q" value="${esc(F.q)}" placeholder="Search ${entries.length} magic items by name, type or effect…" aria-label="Search magic items" autocomplete="off" spellcheck="false">
+        <div class="ip-filter-row" role="group" aria-label="Type"><span class="ip-label">Type</span>${typesHere.map(([k, l]) => chip("data-ip-type", k, l, F.types.includes(k))).join("")}</div>
+        <div class="ip-filter-row" role="group" aria-label="Rarity"><span class="ip-label">Rarity</span>${raritiesHere.map(([k, l]) => chip("data-ip-rarity", k, l, F.rarities.includes(k))).join("")}</div>
+        <details class="ip-advanced"${advCount ? " open" : ""}>
+          <summary>Advanced filters<span class="ip-adv-count"${advCount ? "" : " hidden"}>${advCount}</span></summary>
+          <div class="ip-adv-grid">
+            <label class="ip-field"><span>Attunement</span><select data-ip-attune>
+              ${[["any", "Any"], ["no", "No attunement needed"], ["yes", "Requires attunement"]].map(([k, l]) => `<option value="${k}"${F.attune === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+            <label class="ip-field"><span>Source</span><select data-ip-source><option value="">Any book</option>
+              ${sources.map(x => `<option value="${esc(x)}"${F.source === x ? " selected" : ""}>${esc(SOURCE_NAMES[x] ?? x)}</option>`).join("")}</select></label>
+            <label class="ip-field"><span>Most it can cost (GP)</span><input type="number" min="0" step="50" data-ip-price value="${esc(F.maxPrice)}" placeholder="No limit"></label>
+            <label class="ip-field"><span>Sort by</span><select data-ip-sort>
+              ${[["name", "Name"], ["rarity", "Rarity, common first"], ["rarity-desc", "Rarity, rarest first"], ["price", "Price, cheapest first"]].map(([k, l]) => `<option value="${k}"${F.sort === k ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+            <div class="ip-field ip-wide" role="group" aria-label="What it does on the sheet"><span>What it does on the sheet <small>(any of these)</small></span>
+              <div class="ip-chips">${EFFECT_KINDS.map(([k, l]) => chip("data-ip-fx", k, l, F.effects.includes(k))).join("")}</div></div>
+            <div class="ip-checks ip-wide">
+              <label class="check"><input type="checkbox" data-ip-mine${F.mine ? " checked" : ""}> Only items ${esc(f.details?.name || s.classes[0]?.name || "this character")} can attune to</label>
+              <label class="check"><input type="checkbox" data-ip-rules${F.rules ? " checked" : ""}> Only items that change the sheet</label>
+              <label class="check"><input type="checkbox" data-ip-intext${F.inText ? " checked" : ""}> Search descriptions too</label>
+            </div>
+          </div>
+        </details>
+      </div>
+      <div class="ip-status"><span data-ip-count aria-live="polite"></span><button type="button" class="link-btn" data-ip-reset>Clear filters</button></div>
+      <ul class="ip-results">${rows}<li class="ip-none" hidden>No magic items match. Try fewer filters, or make a custom item.</li></ul>
+      <div class="cond-foot ip-foot"><span class="ip-added muted" aria-live="polite">${F.added ? `Added ${esc(F.added)}.` : ""}</span><button type="button" class="btn btn-primary" data-ip-close>Done</button></div>
+    </div>
+  </div>`;
+}
+
+function advancedCount(F) {
+  return (F.attune !== "any") + F.mine + F.rules + F.inText + (F.source !== "") + (F.maxPrice !== "") + (F.effects.length > 0) + (F.sort !== "name");
+}
+
+// Show the rows that pass every filter. `reorder` re-sorts the list too (on open and when Sort changes).
+function applyItemFilter(reorder = false) {
+  const modal = root.querySelector(".ip-modal");
+  if (!modal) return;
+  const F = ui.itemFilter;
+  const words = searchText(F.q).split(" ").filter(Boolean);
+  const max = F.maxPrice === "" ? null : Number(F.maxPrice);
+  const texts = F.inText ? itemTextIndex() : null;
+  const list = modal.querySelector(".ip-results");
+  const rows = [...list.querySelectorAll(".ip-row")];
   let n = 0;
-  for (const li of list.querySelectorAll("li[data-q]")) {
-    const hit = words.length > 0 && n < ITEM_RESULTS && words.every(w => li.dataset.q.includes(` ${w}`));
-    li.hidden = !hit;
-    if (hit) n++;
+  for (const li of rows) {
+    const d = li.dataset;
+    const hay = d.q + (texts ? texts.get(d.id) ?? "" : "");
+    const ok = (!F.types.length || F.types.includes(d.type))
+      && (!F.rarities.length || F.rarities.includes(d.rarity))
+      && (F.attune === "any" || (F.attune === "yes") === (d.att === "1"))
+      && (!F.mine || d.mine === "1")
+      && (!F.rules || d.fx.trim() !== "")
+      && (!F.effects.length || F.effects.some(k => d.fx.includes(` ${k} `)))
+      && (!F.source || d.src === F.source)
+      && (max == null || (d.price !== "" && Number(d.price) <= max))
+      && words.every(w => hay.includes(` ${w}`));
+    li.hidden = !ok;
+    if (ok) n++;
   }
-  list.querySelector(".item-none").hidden = n > 0;
-  list.hidden = !words.length;
+  if (reorder) {
+    const name = li => li.querySelector(".ip-name strong").textContent;
+    const descRank = li => li.dataset.rarity === "varies" ? -1 : +li.dataset.rank; // "Rarity varies" sorts last either way
+    const by = {
+      name: (a, b) => name(a).localeCompare(name(b)),
+      rarity: (a, b) => a.dataset.rank - b.dataset.rank || name(a).localeCompare(name(b)),
+      "rarity-desc": (a, b) => descRank(b) - descRank(a) || name(a).localeCompare(name(b)),
+      price: (a, b) => (a.dataset.price === "" ? Infinity : +a.dataset.price) - (b.dataset.price === "" ? Infinity : +b.dataset.price) || name(a).localeCompare(name(b)),
+    }[F.sort] ?? (() => 0);
+    list.prepend(...rows.sort(by));
+  }
+  modal.querySelector(".ip-none").hidden = n > 0;
+  modal.querySelector("[data-ip-count]").textContent = n === rows.length ? `${n} magic items` : `${n} of ${rows.length} magic items`;
+  const adv = advancedCount(F), badge = modal.querySelector(".ip-adv-count");
+  badge.textContent = adv; badge.hidden = !adv;
+}
+
+function setupItemPicker(scroll) {
+  applyItemFilter(true);
+  for (const id of ui.itemFilter.open) previewItem(id, true);
+  const list = root.querySelector(".ip-results");
+  if (scroll != null && list) list.scrollTop = scroll;
+}
+
+function previewItem(id, open) {
+  const li = root.querySelector(`.ip-row[data-id="${CSS.escape(id)}"]`);
+  if (!li) return;
+  const btn = li.querySelector(".ip-name"), box = li.querySelector(".ip-detail");
+  const show = open ?? box.hidden;
+  if (show && !box.innerHTML) {
+    const e = loadedPack?.items?.[id];
+    const effects = describeItemEffects(e);
+    box.innerHTML = `${effects.length ? `<ul class="item-effects">${effects.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">Nothing on the sheet changes; the text is the rules.</p>`}
+      ${md(String(e?.text ?? "").replace(/^\s*#{1,6}\s+.*\n+/, ""))}`;
+  }
+  box.hidden = !show;
+  li.classList.toggle("open", show);
+  btn.setAttribute("aria-expanded", show);
+  const F = ui.itemFilter;
+  F.open = show ? [...new Set([...F.open, id])] : F.open.filter(x => x !== id);
+}
+
+function closeItemPicker() {
+  ui.itemPicker = false;
+  if (ui.itemFilter) { ui.itemFilter.added = null; ui.itemFilter.open = []; }
+  render();
+  root.querySelector("[data-item-open]")?.focus();
+}
+
+// Clicks inside the picker. Returns true when handled.
+function itemPickerClick(t) {
+  const d = t.dataset, F = ui.itemFilter;
+  const toggle = (list, key) => { const on = !list.includes(key); t.setAttribute("aria-pressed", on); return on ? [...list, key] : list.filter(x => x !== key); };
+  if (d.ipType) { F.types = toggle(F.types, d.ipType); applyItemFilter(); return true; }
+  if (d.ipRarity) { F.rarities = toggle(F.rarities, d.ipRarity); applyItemFilter(); return true; }
+  if (d.ipFx) { F.effects = toggle(F.effects, d.ipFx); applyItemFilter(); return true; }
+  if (d.ipPreview) { previewItem(d.ipPreview); return true; }
+  if (d.ipReset !== undefined) { ui.itemFilter = newItemFilter(); render(); root.querySelector("[data-ip-q]")?.focus(); return true; }
+  if (d.ipClose !== undefined) { closeItemPicker(); return true; }
+  return false;
+}
+
+// Arrow keys move between the search box and the results' names; Escape clears the search, then closes.
+function itemPickerKey(e) {
+  const t = e.target;
+  const names = () => [...root.querySelectorAll(".ip-row:not([hidden]) .ip-name")];
+  if (e.key === "Escape") {
+    e.preventDefault();
+    if (t.matches("[data-ip-q]") && t.value) { t.value = ""; ui.itemFilter.q = ""; applyItemFilter(); }
+    else closeItemPicker();
+    return;
+  }
+  if (t.matches("[data-ip-q]") && (e.key === "ArrowDown" || e.key === "Enter")) { e.preventDefault(); names()[0]?.focus(); return; }
+  if (t.matches(".ip-name") && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    const list = names(), i = list.indexOf(t) + (e.key === "ArrowDown" ? 1 : -1);
+    (i < 0 ? root.querySelector("[data-ip-q]") : list[Math.min(i, list.length - 1)])?.focus();
+  }
 }
 
 function onKey(e) {
-  if (e.target.matches?.("[data-item-search]")) {
-    if (e.key === "Escape" && e.target.value) { e.target.value = ""; filterItems(e.target); e.stopPropagation(); return; }
-    if (e.key === "Enter") { e.preventDefault(); e.target.parentElement.querySelector("li[data-q]:not([hidden]) button")?.click(); return; }
-    if (e.key === "ArrowDown") { e.preventDefault(); e.target.parentElement.querySelector("li[data-q]:not([hidden]) button")?.focus(); return; }
-  }
-  if (e.target.closest?.("[data-item-results]") && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-    e.preventDefault();
-    const btns = [...e.target.closest("[data-item-results]").querySelectorAll("li[data-q]:not([hidden]) button")];
-    const i = btns.indexOf(e.target) + (e.key === "ArrowDown" ? 1 : -1);
-    (i < 0 ? e.target.closest(".item-search").querySelector("input") : btns[Math.min(i, btns.length - 1)])?.focus();
-    return;
-  }
+  if (ui.itemPicker) return itemPickerKey(e);
   if (e.key !== "Escape") return;
   if (ui.condPicker) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); }
   else if (ui.condOpen) { const c = ui.condOpen; ui.condOpen = null; render(); root.querySelector(`[data-cond-info="${CSS.escape(c)}"]`)?.focus(); }
@@ -650,10 +816,7 @@ function renderItems(s, p, f) {
     </li>`;
   }).join("");
   const add = ui.printing ? "" : `<div class="item-add">
-      ${packItems.length ? `<div class="item-search">
-        <input type="search" data-item-search placeholder="Search ${packItems.length} magic items…" aria-label="Search magic items" autocomplete="off" spellcheck="false">
-        <ul class="item-results" data-item-results hidden>${packItems.map(([id, e]) => `<li hidden data-q="${esc(searchText(`${e.name} ${itemLine(e)}`))}"><button type="button" data-item-add="${esc(id)}"><span>${esc(e.name)}</span><small>${esc(itemLine(e))}</small></button></li>`).join("")}<li class="item-none" hidden>No magic items match.</li></ul>
-      </div>` : ""}
+      ${packItems.length ? `<button type="button" class="btn btn-primary" data-item-open data-focus="item-open">Add magic item</button>` : ""}
       <button type="button" class="btn" data-item-custom>Custom item</button>
     </div>
     ${!packItems.length && !items.length ? `<p class="muted">Load a content pack with items to pick from it, or make a custom item for DM loot.</p>` : ""}
@@ -911,7 +1074,8 @@ const clampInt = (v, min, max) => Math.max(min, Math.min(max, Math.trunc(Number(
 
 function onInput(e) {
   const t = e.target;
-  if (t.matches("[data-item-search]")) return filterItems(t);
+  if (ui.itemPicker && t.matches("[data-ip-q]")) { ui.itemFilter.q = t.value; return applyItemFilter(); }
+  if (ui.itemPicker && t.matches("[data-ip-price]")) { ui.itemFilter.maxPrice = t.value.trim(); return applyItemFilter(); }
   // Custom item editor: typing updates the draft without a re-render.
   if (ui.itemDraft && t.dataset.draft && t.type !== "checkbox") { ui.itemDraft[t.dataset.draft] = t.value; return; }
   if (ui.itemDraft && t.dataset.fx != null && t.tagName !== "SELECT") { ui.itemDraft.effects[Number(t.dataset.fx)][t.dataset.fxField] = t.value; return; }
@@ -926,6 +1090,17 @@ function onInput(e) {
 
 function onChange(e) {
   const t = e.target;
+  if (ui.itemPicker && t.closest(".ip-modal")) {
+    const F = ui.itemFilter;
+    if (t.matches("[data-ip-attune]")) F.attune = t.value;
+    else if (t.matches("[data-ip-source]")) F.source = t.value;
+    else if (t.matches("[data-ip-sort]")) { F.sort = t.value; return applyItemFilter(true); }
+    else if (t.matches("[data-ip-mine]")) F.mine = t.checked;
+    else if (t.matches("[data-ip-rules]")) F.rules = t.checked;
+    else if (t.matches("[data-ip-intext]")) F.inText = t.checked;
+    else return;
+    return applyItemFilter();
+  }
   if (ui.itemDraft && t.dataset.draft === "attunement") { ui.itemDraft.attunement = t.checked; return; }
   if (ui.itemDraft && t.dataset.fx != null) {
     const i = Number(t.dataset.fx);
@@ -941,7 +1116,6 @@ function onChange(e) {
       && !confirm("You're already attuned to 3 items, the usual limit. Attune to this one anyway?")) { t.checked = false; return; }
     return itemChange(p => { const it = p.items.find(x => x.uid === t.dataset.itemAttune); if (it) it.attuned = t.checked; });
   }
-  if (t.matches("[data-item-search]")) return;
   if (t.matches("[data-armor]")) return change(p => { p.armor = t.value; p.ac = null; });
   if (t.matches("[data-shield]")) return change(p => { p.shield = t.checked; });
   if (t.matches("[data-ac-method]")) return change(p => { p.acMethod = t.value; p.ac = null; });
@@ -962,6 +1136,7 @@ function togglePip(store, key, i) {
 function onClick(e) {
   // Clicking the dimmed backdrop closes the conditions window; clicking anywhere else closes a condition's tip.
   if (ui.condPicker && e.target.matches?.("[data-cond-back]")) { ui.condPicker = false; render(); return; }
+  if (ui.itemPicker && e.target.matches?.("[data-ip-back]")) { closeItemPicker(); return; }
   if (ui.condOpen && !e.target.closest(".cond-wrap")) { ui.condOpen = null; if (!e.target.closest("button")) { render(); return; } }
   const t = e.target.closest("button");
   if (!t || !state) return;
@@ -1015,7 +1190,9 @@ function onClick(e) {
   }
   if (d.condInfo) { ui.condOpen = ui.condOpen === d.condInfo ? null : d.condInfo; render(); root.querySelector(`[data-cond-info="${CSS.escape(d.condInfo)}"]`)?.focus(); return; }
   if (d.condRemove) { const n = d.condRemove; ui.condOpen = null; return change(p => { p.conditions = p.conditions.filter(c => c !== n); }); }
-  if (d.itemAdd) return addPackItem(d.itemAdd);
+  if (ui.itemPicker && itemPickerClick(t)) return;
+  if (d.itemOpen !== undefined) { ui.itemPicker = true; ui.itemFilter ??= newItemFilter(); ui.itemFilter.added = null; render(); root.querySelector("[data-ip-q]")?.focus(); return; }
+  if (d.itemAdd) { if (ui.itemFilter) ui.itemFilter.added = loadedPack?.items?.[d.itemAdd]?.name ?? null; return addPackItem(d.itemAdd); }
   if (d.itemCustom !== undefined) { ui.itemDraft = { uid: null, name: "", text: "", attunement: false, effects: [newEffect("ac")] }; render(); root.querySelector('[data-focus="draft-name"]')?.focus(); return; }
   if (d.itemEdit) {
     const it = state.file.play.items.find(x => x.uid === d.itemEdit);

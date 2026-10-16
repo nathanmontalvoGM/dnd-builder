@@ -33,6 +33,10 @@ export function describeItemEffects(e) {
   return out;
 }
 
+// "zone-of-truth" -> "Zone of Truth", for spells the pack has no note for yet.
+const SMALL = new Set(["of", "the", "and", "or", "from", "to", "a", "an", "with", "in", "on", "for"]);
+const spellName = id => id.split("-").map((w, i) => i && SMALL.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+
 export function describeGrant(g) {
   if (!g || typeof g !== "object") return "";
   const v = typeof g.value === "number" ? signed(g.value) : `+${g.value}`;
@@ -54,7 +58,7 @@ export function describeGrant(g) {
     case "resource":
       return `${g.max} ${g.name?.toLowerCase().includes("charge") ? g.name : `uses of ${g.name}`}, back ${g.recharge === "dawn" ? "at dawn" : `on a ${g.recharge} rest`}`;
     case "spells":
-      return `Spells: ${(g.ids ?? []).map(id => id.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())).join(", ")}${g.dc ? ` (save DC ${g.dc})` : ""}`;
+      return `Spells: ${(g.ids ?? []).map(spellName).join(", ")}${g.dc ? ` (save DC ${g.dc})` : ""}`;
     case "proficiency":
       return `${g.kind[0].toUpperCase() + g.kind.slice(1)} proficiency: ${(g.values ?? []).join(", ")}`;
     case "feature": {
@@ -120,3 +124,46 @@ export function customEntry(c, uid) {
 }
 
 export const SKILL_NAMES = Object.keys(SKILLS);
+
+// ---------- the magic item picker ----------
+export const ITEM_TYPES = [["armor", "Armor"], ["weapon", "Weapons"], ["ring", "Rings"], ["wand", "Wands"], ["rod", "Rods"], ["staff", "Staffs"], ["potion", "Potions"], ["scroll", "Scrolls"], ["wondrous", "Wondrous items"]];
+export const RARITIES = [["common", "Common"], ["uncommon", "Uncommon"], ["rare", "Rare"], ["very_rare", "Very rare"], ["legendary", "Legendary"], ["artifact", "Artifact"], ["varies", "Varies"]];
+export const rarityRank = r => { const i = RARITIES.findIndex(([k]) => k === (r ?? "varies")); return i < 0 ? RARITIES.length : i; };
+// What an item does on the sheet, as filter categories.
+export const EFFECT_KINDS = [["ac", "Armor Class"], ["weapon", "Weapon attack"], ["saves", "Saving throws"], ["checks", "Checks and Initiative"], ["scores", "Ability scores"],
+  ["spellcasting", "Spell attack and DC"], ["spells", "Casts spells"], ["charges", "Charges or uses"], ["resist", "Resistance"], ["senses", "Speed and Darkvision"]];
+export function itemEffectKinds(e) {
+  const k = new Set();
+  if (e?.armor) k.add("ac");
+  if (e?.weapon) k.add("weapon");
+  for (const g of e?.grants ?? []) {
+    if (g.type === "bonus") k.add({ ac: "ac", saves: "saves", checks: "checks", initiative: "checks", spell_attack: "spellcasting", spell_dc: "spellcasting", attack: "weapon", damage: "weapon", hp_max: "scores" }[g.to] ?? "checks");
+    if (g.type === "ability") k.add("scores");
+    if (g.type === "spells") k.add("spells");
+    if (g.type === "resource") k.add("charges");
+    if (g.type === "stat" && ["speed", "darkvision"].includes(g.stat)) k.add("senses");
+    if (g.type === "feature" && g.resistances?.length) k.add("resist");
+    if (g.type === "feature" && g.advantage?.length) k.add(g.advantage.some(a => a.on === "save") ? "saves" : "checks");
+  }
+  return [...k];
+}
+// "400 GP", "B+4,000 GP" (the base item's cost plus 4,000) -> 400, 4000. "Varies" -> null.
+export function itemPrice(e) {
+  const m = String(e?.price ?? "").replace(/,/g, "").match(/(\d+(?:\.\d+)?)\s*(GP|SP|CP|PP)?/i);
+  if (!m) return null;
+  return Number(m[1]) * ({ cp: 0.01, sp: 0.1, gp: 1, pp: 10 }[(m[2] ?? "gp").toLowerCase()]);
+}
+// "requires attunement by a Cleric or Paladin": can this character attune? Unknown requirements
+// (alignment, "a creature of the weapon's choice") count as yes.
+const CLASS_NAMES = ["artificer", "barbarian", "bard", "cleric", "druid", "fighter", "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard"];
+export function canAttune(e, classNames = [], speciesName = "", isCaster = false) {
+  if (typeof e?.attunement !== "string") return true;
+  const req = e.attunement.toLowerCase();
+  const mine = classNames.map(c => c.toLowerCase());
+  const named = CLASS_NAMES.filter(c => new RegExp(`\\b${c}`).test(req));
+  if (named.length && named.some(c => mine.includes(c))) return true;
+  if (/spellcaster/.test(req) && isCaster) return true;
+  if (/\bdwarf/.test(req) && /dwarf/i.test(speciesName)) return true;
+  if (/\belf\b/.test(req) && /elf/i.test(speciesName)) return true;
+  return !named.length && !/spellcaster|\bdwarf|\belf\b/.test(req);
+}
