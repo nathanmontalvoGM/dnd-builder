@@ -812,7 +812,13 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .item-effects li { margin: 0.1rem 0; }
 .item-actions { margin: 0.3rem 0 0; }
 .item-add { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; }
-.item-add select { flex: 1 1 10rem; min-width: 0; font: inherit; font-size: 15px; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.3rem 0.4rem; }
+.item-search { flex: 1 1 14rem; min-width: 0; position: relative; }
+.item-search input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.35rem 0.5rem; }
+.item-results { list-style: none; margin: 0.3rem 0 0; padding: 0.2rem; max-height: 18rem; overflow-y: auto; border: 1px solid var(--rule); border-radius: var(--radius-sm); background: var(--paper); }
+.item-results button { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; width: 100%; text-align: left; font: inherit; color: var(--ink); background: none; border: 0; border-radius: var(--radius-sm); padding: 0.3rem 0.45rem; cursor: pointer; }
+.item-results button small { color: var(--muted); font-size: 0.85em; }
+.item-results button:hover, .item-results button:focus-visible { background: var(--verdigris-soft); outline: none; }
+.item-none { padding: 0.35rem 0.45rem; color: var(--muted); }
 .attune-count { font-size: 0.85rem; color: var(--muted); }
 .attune-count.over { color: var(--danger); font-weight: 600; }
 .armor-item { font-size: 0.88rem; }

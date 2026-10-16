@@ -54,7 +54,7 @@ export function describeGrant(g) {
     case "resource":
       return `${g.max} ${g.name?.toLowerCase().includes("charge") ? g.name : `uses of ${g.name}`}, back ${g.recharge === "dawn" ? "at dawn" : `on a ${g.recharge} rest`}`;
     case "spells":
-      return `Spells: ${(g.ids ?? []).map(id => id.replace(/-/g, " ")).join(", ")}${g.dc ? ` (save DC ${g.dc})` : ""}`;
+      return `Spells: ${(g.ids ?? []).map(id => id.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())).join(", ")}${g.dc ? ` (save DC ${g.dc})` : ""}`;
     case "proficiency":
       return `${g.kind[0].toUpperCase() + g.kind.slice(1)} proficiency: ${(g.values ?? []).join(", ")}`;
     case "feature": {

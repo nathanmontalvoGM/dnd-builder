@@ -583,7 +583,37 @@ function renderConditionPicker(conds) {
   </div>`;
 }
 
+// The magic item search: every word has to match the name, rarity or type ("rare ring", "flame").
+// Filters the list in place rather than re-rendering, so typing keeps its focus.
+// Words match from their start, so "ring" finds rings but not "Bag of Devouring".
+const ITEM_RESULTS = 40;
+const searchText = s => ` ${String(s).toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9+]+/g, " ").trim()}`;
+function filterItems(input) {
+  const list = input.parentElement.querySelector("[data-item-results]");
+  const words = searchText(input.value).split(" ").filter(Boolean);
+  let n = 0;
+  for (const li of list.querySelectorAll("li[data-q]")) {
+    const hit = words.length > 0 && n < ITEM_RESULTS && words.every(w => li.dataset.q.includes(` ${w}`));
+    li.hidden = !hit;
+    if (hit) n++;
+  }
+  list.querySelector(".item-none").hidden = n > 0;
+  list.hidden = !words.length;
+}
+
 function onKey(e) {
+  if (e.target.matches?.("[data-item-search]")) {
+    if (e.key === "Escape" && e.target.value) { e.target.value = ""; filterItems(e.target); e.stopPropagation(); return; }
+    if (e.key === "Enter") { e.preventDefault(); e.target.parentElement.querySelector("li[data-q]:not([hidden]) button")?.click(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); e.target.parentElement.querySelector("li[data-q]:not([hidden]) button")?.focus(); return; }
+  }
+  if (e.target.closest?.("[data-item-results]") && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    const btns = [...e.target.closest("[data-item-results]").querySelectorAll("li[data-q]:not([hidden]) button")];
+    const i = btns.indexOf(e.target) + (e.key === "ArrowDown" ? 1 : -1);
+    (i < 0 ? e.target.closest(".item-search").querySelector("input") : btns[Math.min(i, btns.length - 1)])?.focus();
+    return;
+  }
   if (e.key !== "Escape") return;
   if (ui.condPicker) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); }
   else if (ui.condOpen) { const c = ui.condOpen; ui.condOpen = null; render(); root.querySelector(`[data-cond-info="${CSS.escape(c)}"]`)?.focus(); }
@@ -620,8 +650,10 @@ function renderItems(s, p, f) {
     </li>`;
   }).join("");
   const add = ui.printing ? "" : `<div class="item-add">
-      ${packItems.length ? `<select data-item-pick aria-label="Magic item to add"><option value="">Pick a magic item…</option>${packItems.map(([id, e]) => `<option value="${esc(id)}">${esc(e.name)}</option>`).join("")}</select>
-        <button type="button" class="btn" data-item-add>Add</button>` : ""}
+      ${packItems.length ? `<div class="item-search">
+        <input type="search" data-item-search placeholder="Search ${packItems.length} magic items…" aria-label="Search magic items" autocomplete="off" spellcheck="false">
+        <ul class="item-results" data-item-results hidden>${packItems.map(([id, e]) => `<li hidden data-q="${esc(searchText(`${e.name} ${itemLine(e)}`))}"><button type="button" data-item-add="${esc(id)}"><span>${esc(e.name)}</span><small>${esc(itemLine(e))}</small></button></li>`).join("")}<li class="item-none" hidden>No magic items match.</li></ul>
+      </div>` : ""}
       <button type="button" class="btn" data-item-custom>Custom item</button>
     </div>
     ${!packItems.length && !items.length ? `<p class="muted">Load a content pack with items to pick from it, or make a custom item for DM loot.</p>` : ""}
@@ -879,6 +911,7 @@ const clampInt = (v, min, max) => Math.max(min, Math.min(max, Math.trunc(Number(
 
 function onInput(e) {
   const t = e.target;
+  if (t.matches("[data-item-search]")) return filterItems(t);
   // Custom item editor: typing updates the draft without a re-render.
   if (ui.itemDraft && t.dataset.draft && t.type !== "checkbox") { ui.itemDraft[t.dataset.draft] = t.value; return; }
   if (ui.itemDraft && t.dataset.fx != null && t.tagName !== "SELECT") { ui.itemDraft.effects[Number(t.dataset.fx)][t.dataset.fxField] = t.value; return; }
@@ -908,7 +941,7 @@ function onChange(e) {
       && !confirm("You're already attuned to 3 items, the usual limit. Attune to this one anyway?")) { t.checked = false; return; }
     return itemChange(p => { const it = p.items.find(x => x.uid === t.dataset.itemAttune); if (it) it.attuned = t.checked; });
   }
-  if (t.matches("[data-item-pick]")) return;
+  if (t.matches("[data-item-search]")) return;
   if (t.matches("[data-armor]")) return change(p => { p.armor = t.value; p.ac = null; });
   if (t.matches("[data-shield]")) return change(p => { p.shield = t.checked; });
   if (t.matches("[data-ac-method]")) return change(p => { p.acMethod = t.value; p.ac = null; });
@@ -982,11 +1015,7 @@ function onClick(e) {
   }
   if (d.condInfo) { ui.condOpen = ui.condOpen === d.condInfo ? null : d.condInfo; render(); root.querySelector(`[data-cond-info="${CSS.escape(d.condInfo)}"]`)?.focus(); return; }
   if (d.condRemove) { const n = d.condRemove; ui.condOpen = null; return change(p => { p.conditions = p.conditions.filter(c => c !== n); }); }
-  if (d.itemAdd !== undefined) {
-    const sel = root.querySelector("[data-item-pick]");
-    if (!sel?.value) { sel?.focus(); return; }
-    return addPackItem(sel.value);
-  }
+  if (d.itemAdd) return addPackItem(d.itemAdd);
   if (d.itemCustom !== undefined) { ui.itemDraft = { uid: null, name: "", text: "", attunement: false, effects: [newEffect("ac")] }; render(); root.querySelector('[data-focus="draft-name"]')?.focus(); return; }
   if (d.itemEdit) {
     const it = state.file.play.items.find(x => x.uid === d.itemEdit);

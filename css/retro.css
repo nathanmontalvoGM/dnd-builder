@@ -809,6 +809,12 @@
   [data-skin="retro"] .attune-count { font: 12px/1.4 var(--sans); color: #f0cf6a; text-shadow: none; }
   [data-skin="retro"] .attune-count.over { color: #ffb4a0; }
   [data-skin="retro"] .item-effects { font: 14px/1.45 var(--body); }
+  [data-skin="retro"] .item-search input { font: 15px var(--body); background: #fffbe0; border: 2px inset #b9a47a; }
+  [data-skin="retro"] .item-results { background: #fbf6e6; border: 2px solid #6b5333; box-shadow: 2px 2px 0 rgba(0,0,0,0.25); }
+  [data-skin="retro"] .item-results li:nth-child(even) button { background: #f3ead2; }
+  [data-skin="retro"] .item-results button > span { font: 15px/1.2 var(--body); color: #1a0a04; }
+  [data-skin="retro"] .item-results button small { font: 12px var(--body); color: #5a4a36; }
+  [data-skin="retro"] .item-results button:hover, [data-skin="retro"] .item-results button:focus-visible { background: #f4e6b0; outline: 1px dotted #7a0e0e; }
   [data-skin="retro"] .item-draft { background: #fffbe0; border: 1px dashed #b8962e; }
   [data-skin="retro"] .item-draft h3 { font: 18px/1.2 var(--label); color: #7a0e0e; }
   [data-skin="retro"] .fx-field { font: 12px var(--sans); color: #5a4a36; }
