@@ -575,8 +575,8 @@
 
   /* Hit points: a heart holding the current HP, temp HP and damage/heal beside it, a vial below */
   [data-skin="retro"] .hp-box {
-    display: grid; grid-template-columns: 124px minmax(0, 1fr) auto; align-items: center; column-gap: 16px; row-gap: 6px;
-    grid-template-areas: "title title title" "heart temp insp" "heart adjust adjust" "bar bar bar";
+    display: grid; grid-template-columns: 124px minmax(0, 1fr); align-items: center; column-gap: 16px; row-gap: 6px;
+    grid-template-areas: "title title" "heart temp" "heart insp" "heart adjust" "bar bar";
   }
   [data-skin="retro"] .hp-box::before { grid-area: title; }
   [data-skin="retro"] .hp-numbers { display: contents; }
@@ -785,7 +785,8 @@
 
 /* Heroic Inspiration inside the HP box: a gold-rimmed circle, filled with gold while you have it */
 @media screen {
-  [data-skin="retro"] .hp-box .insp { grid-area: insp; justify-self: end; padding-right: 4px; }
+  /* own row under Temporary HP, so it can't run into it on narrower screens */
+  [data-skin="retro"] .hp-box .insp { grid-area: insp; justify-self: start; min-width: 0; }
   [data-skin="retro"] .insp-toggle { gap: 8px; padding: 0; background: none; border: 0; font: 15px/1.2 var(--label); color: #5a4a36; }
   [data-skin="retro"] .insp-dot {
     width: 24px; height: 24px; border-radius: 50% !important; border: 3px solid #b8962e; outline: 1px solid #000;
@@ -795,7 +796,4 @@
   [data-skin="retro"] .insp-toggle.on { color: #7a0e0e; }
   [data-skin="retro"] .insp-toggle.on .insp-dot { background: radial-gradient(circle at 35% 30%, #fff6b0, #e0b420 55%, #8a6400); }
 }
-@media screen and (max-width: 760px) {
-  [data-skin="retro"] .hp-box { grid-template-columns: 124px minmax(0, 1fr); grid-template-areas: "title title" "heart temp" "heart insp" "heart adjust" "bar bar"; }
-  [data-skin="retro"] .hp-box .insp { justify-self: start; }
-}
+@media screen { [data-skin="retro"] .hp-box .hp-temp { min-width: 0; flex-wrap: wrap; } }
