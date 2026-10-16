@@ -296,7 +296,6 @@ function render() {
   // full-width row under the columns so it doesn't stretch one column far past the others.
   const sideCol = [
     renderResources(s, p),
-    renderItems(s, p, f),
     hz("panel:training", "Training", "panel", `<h2>Training</h2>
       <dl class="facts compact one-col">
         <div><dt>Armor</dt><dd>${esc(uniq(s.proficiencies.armor).join(", ") || "None")}</dd></div>
@@ -305,8 +304,10 @@ function render() {
         <div><dt>Languages</dt><dd>${esc(uniq(s.proficiencies.language).join(", "))}</dd></div>
       </dl>`, "section"),
     renderDefenses(s),
-    hz("panel:equipment", "Equipment", "panel", `<h2>Equipment</h2>
-      <label class="visually-hidden" for="equip">Equipment</label>
+    // Magic items sit at the top of Equipment, with the rest of the gear and coins under them.
+    hz("panel:equipment", "Equipment", "panel equipment-panel", `<h2>Equipment</h2>
+      ${renderItems(s, p, f)}
+      <div class="equip-sub"><h3><label for="equip">Gear</label></h3></div>
       ${box(`<textarea id="equip" rows="10" data-play="equipment" data-focus="equipment" placeholder="One item per line">${esc(p.equipment)}</textarea>`, p.equipment)}
       <div class="coins">${COINS.map(c => `<label><span>${c.toUpperCase()}</span><input type="number" min="0" data-play="coins.${c}" data-focus="coin-${c}" value="${p.coins[c] ?? 0}"></label>`).join("")}</div>`, "section"),
   ].join("");
@@ -821,10 +822,10 @@ function renderItems(s, p, f) {
     </div>
     ${!packItems.length && !items.length ? `<p class="muted">Load a content pack with items to pick from it, or make a custom item for DM loot.</p>` : ""}
     ${ui.itemDraft ? renderItemDraft() : ""}`;
-  return hz("panel:items", "Magic items", "panel items-panel", `<div class="panel-head"><h2>Magic items</h2>
+  return hz("panel:items", "Magic items", "items-panel", `<div class="equip-sub"><h3>Magic items</h3>
       ${anyAttune ? `<span class="attune-count${attuned > 3 ? " over" : ""}" title="Most characters can attune to 3 items at once">Attuned ${attuned} / 3</span>` : ""}</div>
     ${rows ? `<ul class="item-list">${rows}</ul>` : items.length ? `<p class="muted">Everything here is hidden.</p>` : `<p class="muted">No magic items yet.</p>`}
-    ${add}`, "section");
+    ${add}`);
 }
 
 // The custom item editor: name, attunement, text and a list of effects.

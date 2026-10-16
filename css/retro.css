@@ -806,8 +806,10 @@
   [data-skin="retro"] .item-row.inactive .feature-toggle > span:first-child { color: #8a7a62; }
   [data-skin="retro"] .item-row .feature-toggle .muted { font-size: 12px; }
   [data-skin="retro"] .item-controls { font-size: 12px; }
-  [data-skin="retro"] .attune-count { font: 12px/1.4 var(--sans); color: #f0cf6a; text-shadow: none; }
-  [data-skin="retro"] .attune-count.over { color: #ffb4a0; }
+  [data-skin="retro"] .attune-count { font: 12px/1.4 var(--sans); color: #5a4a36; text-shadow: none; }
+  [data-skin="retro"] .attune-count.over { color: #a00000; font-weight: bold; }
+  [data-skin="retro"] .equip-sub { border-bottom: 1px dotted #b8962e; }
+  [data-skin="retro"] .equip-sub h3 { font: normal 16px/1.3 var(--label); color: #7a0e0e; text-transform: none; letter-spacing: 0; }
   [data-skin="retro"] .item-effects { font: 14px/1.45 var(--body); }
   [data-skin="retro"] .ip-modal { height: min(52rem, 92vh); }
   [data-skin="retro"] .ip-search { font: 16px var(--body); background: #fffbe0; border: 2px inset #b9a47a; }
