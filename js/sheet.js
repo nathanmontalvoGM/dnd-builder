@@ -3,6 +3,7 @@
 // Only `play` (HP, used slots, gear, notes) changes here; the build is read-only.
 import { summarize, resolve, normalizeBuild, mergeContent, snapshotFor, titleCase } from "./engine.js";
 import { esc, md } from "./render.js";
+import { itemLine, describeItemEffects, needsAttunement, customEntry, EFFECTS, effectDef, newEffect, DAMAGE_TYPES, SKILL_NAMES } from "./items.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal } from "./rules.js";
 
 const OPEN_KEY = "character-builder:sheet";
@@ -12,7 +13,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false }; // expanded rows, collapsed groups, Edit layout mode
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -67,7 +68,19 @@ export function closeCharacter() {
 }
 
 const snapshotPack = file => ({ meta: { version: file.pack?.version }, ...file.snapshot });
-const computed = () => summarize(state.file.build, snapshotPack(state.file));
+
+// Magic items live in play.items: { uid, ref (a content-pack item id) or custom, equipped, attuned }.
+// Pack items are copied into snapshot.items so the sheet works without the pack.
+const itemEntry = (file, it) => (it.custom ? customEntry(it.custom, it.uid) : file.snapshot?.items?.[it.ref] ?? null);
+const itemActive = (file, it) => !!it.equipped && (!needsAttunement(itemEntry(file, it)) || !!it.attuned);
+const activeItems = file => (file.play?.items ?? []).filter(it => itemActive(file, it)).map(it => ({ key: it.uid, entry: itemEntry(file, it) })).filter(x => x.entry);
+const newUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function summaryFor(file) {
+  const pack = snapshotPack(file);
+  return summarize(file.build, pack, resolve(file.build, pack, { items: activeItems(file) }));
+}
+const computed = () => summaryFor(state.file);
 
 function ensurePlay() {
   const s = computed();
@@ -92,6 +105,7 @@ function ensurePlay() {
   p.notes ??= "";
   p.characterNotes ??= "";
   p.hidden ??= [];        // ids of sheet elements hidden with Edit layout
+  p.items ??= [];         // magic items
 }
 
 function startingEquipmentText() {
@@ -148,6 +162,7 @@ function featureGroup(f, snapshot) {
   if (k.includes(">feat.")) return "feats";
   if (k.startsWith("species.")) return "species";
   if (k.startsWith("background.")) return "background";
+  if (k.startsWith("item.")) return "items";
   const m = k.match(/^(class|subclass)\.([^/>]+)/);
   if (!m) return "other";
   return `class:${m[1] === "class" ? m[2] : snapshot.subclasses?.[m[2]]?.class ?? m[2]}`;
@@ -243,10 +258,12 @@ function render() {
     hz("stat:armor", "Armor and AC", "stat-box armor-box", `
         <span class="label">Armor and AC</span>
         <div class="armor-controls">
-          <label>Armor <select data-armor aria-label="Armor worn">${["none", "light", "medium", "heavy"].map(a => `<option value="${a}" ${p.armor === a ? "selected" : ""}>${a === "none" ? "None" : titleCase(a)}</option>`).join("")}</select></label>
-          <label class="check"><input type="checkbox" data-shield ${p.shield ? "checked" : ""}> Shield</label>
+          ${armorState.armorItem ? `<span class="armor-item">Armor: <strong>${esc(armorState.armorItem.name)}</strong></span>`
+            : `<label>Armor <select data-armor aria-label="Armor worn">${["none", "light", "medium", "heavy"].map(a => `<option value="${a}" ${p.armor === a ? "selected" : ""}>${a === "none" ? "None" : titleCase(a)}</option>`).join("")}</select></label>`}
+          ${armorState.shieldItem ? `<span class="armor-item">Shield: <strong>${esc(armorState.shieldItem.name)}</strong></span>`
+            : `<label class="check"><input type="checkbox" data-shield ${p.shield ? "checked" : ""}> Shield</label>`}
         </div>
-        ${armorState.options.length > 1 ? `<label class="ac-from">AC from <select data-ac-method aria-label="How AC is calculated">${armorState.options.map(o => `<option value="${esc(o.name)}" ${o.name === armorState.method ? "selected" : ""}>${esc(o.name)} (${o.value + (p.shield ? 2 : 0)})</option>`).join("")}</select></label>` : ""}
+        ${armorState.options.length > 1 ? `<label class="ac-from">AC from <select data-ac-method aria-label="How AC is calculated">${armorState.options.map(o => `<option value="${esc(o.name)}" ${o.name === armorState.method ? "selected" : ""}>${esc(o.name)} (${o.value + armorState.shieldAc + armorState.bonus})</option>`).join("")}</select></label>` : ""}
         ${armorState.note ? `<small>${esc(armorState.note)}</small>` : ""}`),
   ].join("");
 
@@ -272,6 +289,7 @@ function render() {
   // full-width row under the columns so it doesn't stretch one column far past the others.
   const sideCol = [
     renderResources(s, p),
+    renderItems(s, p, f),
     hz("panel:training", "Training", "panel", `<h2>Training</h2>
       <dl class="facts compact one-col">
         <div><dt>Armor</dt><dd>${esc(uniq(s.proficiencies.armor).join(", ") || "None")}</dd></div>
@@ -386,11 +404,14 @@ function refreshContent(before) {
   if (!loadedPack || !confirm("Update this character's rules text and numbers from the loaded content pack? Your choices stay the same. Save the file afterward to keep it.")) return;
   const f = state.file;
   const merged = mergeContent(loadedPack, f.snapshot);
-  const res = resolve(f.build, merged);
+  // Every pack item the character has (equipped or not) stays in the snapshot, with its spells.
+  const refs = [...new Set((f.play.items ?? []).filter(it => !it.custom && it.ref).map(it => it.ref))];
+  const res = resolve(f.build, merged, { items: refs.map(id => ({ key: id, entry: merged.items?.[id] })).filter(x => x.entry) });
   change((p, file) => {
     file.snapshot = snapshotFor(res, merged);
+    file.snapshot.items = Object.fromEntries(refs.filter(id => merged.items?.[id]).map(id => [id, merged.items[id]]));
     file.pack = { version: loadedPack.meta?.version, built: loadedPack.meta?.built };
-    const after = summarize(file.build, { meta: {}, ...file.snapshot });
+    const after = summaryFor(file);
     const delta = (after.hp ?? 0) - (before.hp ?? 0);
     p.hp.current = Math.max(0, Math.min(after.hp ?? 0, p.hp.current + delta));
   });
@@ -400,20 +421,36 @@ function refreshContent(before) {
 // Which AC calculations apply with the armor and shield toggles, which one is used, and the
 // speed bonuses that switch off in armor (Unarmored Movement) or heavy armor (Fast Movement).
 function armorView(s, p) {
-  const armored = p.armor && p.armor !== "none";
-  const options = armored ? [] : s.acOptions.filter(o => o.armor === "none" && (!p.shield || o.shield));
+  // Armor or a shield from an equipped magic item takes over from the manual toggles.
+  const armorItem = (s.armorItems ?? []).find(a => a.type !== "shield");
+  const shieldItem = (s.armorItems ?? []).find(a => a.type === "shield");
+  const armorType = armorItem?.type ?? p.armor ?? "none";
+  const armored = armorType !== "none";
+  const shield = !!shieldItem || !!p.shield;
+  const fails = req => ({
+    no_armor: armored, no_heavy_armor: armorType === "heavy", no_shield: shield, unarmored: armored || shield,
+  })[req] ?? false;
+  const shieldAc = shield ? 2 + (shieldItem?.bonus ?? 0) : 0;
+  const bonuses = (s.acBonuses ?? []).filter(b => !b.requires || !fails(b.requires));
+  const bonus = bonuses.reduce((n, b) => n + (b.value ?? 0), 0);
+  const options = armored ? [] : s.acOptions.filter(o => o.armor === "none" && (!shield || o.shield));
   const best = options.slice().sort((a, b) => b.value - a.value)[0];
   const chosen = options.find(o => o.name === p.acMethod) ?? best;
-  const ac = chosen ? chosen.value + (p.shield ? 2 : 0) : null;
-  const fails = req => ({
-    no_armor: armored, no_heavy_armor: p.armor === "heavy", no_shield: !!p.shield, unarmored: armored || !!p.shield,
-  })[req] ?? false;
+  let base = null, baseName = "";
+  if (armorItem) {
+    const dex = s.mods.dex;
+    base = armorItem.ac + (armorType === "light" ? dex : armorType === "medium" ? Math.min(dex, 2) : 0) + (armorItem.bonus ?? 0);
+    baseName = armorItem.name;
+  } else if (chosen) { base = chosen.value; baseName = chosen.name; }
+  const ac = base != null ? base + shieldAc + bonus : null;
   const speedLost = (s.conditionalStats ?? []).filter(c => c.stat === "speed" && fails(c.requires)).reduce((n, c) => n + (c.value ?? 0), 0);
-  const lostAc = s.acOptions.filter(o => o.armor === "none" && !options.includes(o) && o.source !== "Core rules").map(o => o.name);
-  const note = armored ? "Your armor sets your AC; type it in the box."
+  const lostAc = armored ? [] : s.acOptions.filter(o => o.armor === "none" && !options.includes(o) && o.source !== "Core rules").map(o => o.name);
+  const bonusNames = bonuses.map(b => b.source);
+  const note = armored && !armorItem ? `Your armor sets your AC; type it in the box${bonus ? ` (add ${signed(bonus)} from ${bonusNames.join(", ")})` : ""}.`
     : lostAc.length ? `${lostAc.join(", ")} doesn't work with a shield.` : "";
   const why = armored ? "in armor" : "with a shield";
-  return { why, options, method: chosen?.name ?? null, ac, label: chosen ? `${chosen.name}${p.shield ? " + shield" : ""}` : "", speed: s.speed - speedLost, speedLost, note };
+  const label = base != null ? [baseName, shield ? (shieldItem?.name ?? "shield") : null, ...bonusNames].filter(Boolean).join(" + ") : "";
+  return { why, options, method: chosen?.name ?? null, ac, label, speed: s.speed - speedLost, speedLost, note, armorItem, shieldItem, armorType, shield, shieldAc, bonus };
 }
 
 // Advantage marker for a save, skill or initiative. Conditional ones get an asterisk and a tooltip.
@@ -472,7 +509,10 @@ function renderAttacks(s, p) {
     <table class="attack-table computed"><tbody><tr>
       <th scope="row">${esc(u.name)}</th><td>${signed(u.attack)}</td><td>${esc(`${u.damage} ${u.type}`)}</td>
       <td class="muted">${esc([u.source !== "Core rules" ? `${u.source}, ${ABILITIES[u.ability]}` : ABILITIES[u.ability], ...u.notes].join("; "))}</td>
-    </tr></tbody></table>
+    </tr>${(s.weaponAttacks ?? []).map(w => `<tr class="item-attack">
+      <th scope="row">${esc(w.name)}</th><td>${signed(w.attack)}</td><td>${esc(w.damage)}</td>
+      <td class="muted">${esc([ABILITIES[w.ability], w.properties].filter(Boolean).join("; "))}</td>
+    </tr>`).join("")}</tbody></table>
     ${p.attacks.length ? `<table class="attack-table">
       <thead><tr><th scope="col">Name</th><th scope="col">Attack</th><th scope="col">Damage</th><th scope="col">Notes</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
       <tbody>${p.attacks.map((a, i) => `<tr>
@@ -504,6 +544,120 @@ function renderResources(s, p) {
     ${rows ? `<ul class="resource-list">${rows}</ul>` : `<p class="muted">Everything here is hidden.</p>`}`, "section");
 }
 
+// ---------- magic items ----------
+function renderItems(s, p, f) {
+  const items = p.items ?? [];
+  const attuned = items.filter(it => it.attuned && needsAttunement(itemEntry(f, it))).length;
+  const anyAttune = items.some(it => needsAttunement(itemEntry(f, it)));
+  const packItems = Object.entries(loadedPack?.items ?? {}).sort(([, a], [, b]) => a.name.localeCompare(b.name));
+  const rows = items.map(it => {
+    const e = itemEntry(f, it);
+    const id = `item:${it.uid}`;
+    if (!shown(`row:${id}`)) return "";
+    const open = ui.printing || ui.open.has(id);
+    const status = !e ? "Not in this character's content" : !it.equipped ? "Not equipped" : needsAttunement(e) && !it.attuned ? "Not attuned: no effect yet" : "";
+    const effects = describeItemEffects(e);
+    return `<li class="item-row hideable${open ? " open" : ""}${itemActive(f, it) ? "" : " inactive"}${isHidden(`row:${id}`) ? " is-hidden" : ""}">
+      ${hideBtn(`row:${id}`, e?.name ?? "item")}
+      <div class="item-line">
+        <button type="button" class="feature-toggle" data-toggle="${esc(id)}" aria-expanded="${open}"><span>${esc(e?.name ?? "Missing item")}</span><span class="muted">${esc(status || itemLine(e))}</span></button>
+        <span class="item-controls">
+          <label class="check"><input type="checkbox" data-item-equip="${esc(it.uid)}" ${it.equipped ? "checked" : ""}> Equipped</label>
+          ${needsAttunement(e) ? `<label class="check"><input type="checkbox" data-item-attune="${esc(it.uid)}" ${it.attuned ? "checked" : ""}> Attuned</label>` : ""}
+        </span>
+      </div>
+      ${open ? `<div class="feature-body item-body">
+        ${status ? `<p class="muted">${esc(itemLine(e))}</p>` : ""}
+        ${effects.length ? `<ul class="item-effects">${effects.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+        ${md(String(e?.text ?? "").replace(/^\s*#{1,6}\s+.*\n+/, ""))}
+        ${ui.printing ? "" : `<p class="item-actions">${it.custom ? `<button type="button" class="link-btn" data-item-edit="${esc(it.uid)}">Edit</button> · ` : ""}<button type="button" class="link-btn" data-item-remove="${esc(it.uid)}">Remove</button></p>`}
+      </div>` : ""}
+    </li>`;
+  }).join("");
+  const add = ui.printing ? "" : `<div class="item-add">
+      ${packItems.length ? `<select data-item-pick aria-label="Magic item to add"><option value="">Pick a magic item…</option>${packItems.map(([id, e]) => `<option value="${esc(id)}">${esc(e.name)}</option>`).join("")}</select>
+        <button type="button" class="btn" data-item-add>Add</button>` : ""}
+      <button type="button" class="btn" data-item-custom>Custom item</button>
+    </div>
+    ${!packItems.length && !items.length ? `<p class="muted">Load a content pack with items to pick from it, or make a custom item for DM loot.</p>` : ""}
+    ${ui.itemDraft ? renderItemDraft() : ""}`;
+  return hz("panel:items", "Magic items", "panel items-panel", `<div class="panel-head"><h2>Magic items</h2>
+      ${anyAttune ? `<span class="attune-count${attuned > 3 ? " over" : ""}" title="Most characters can attune to 3 items at once">Attuned ${attuned} / 3</span>` : ""}</div>
+    ${rows ? `<ul class="item-list">${rows}</ul>` : items.length ? `<p class="muted">Everything here is hidden.</p>` : `<p class="muted">No magic items yet.</p>`}
+    ${add}`, "section");
+}
+
+// The custom item editor: name, attunement, text and a list of effects.
+function renderItemDraft() {
+  const d = ui.itemDraft;
+  const opt = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? "selected" : ""}>${esc(l)}</option>`).join("");
+  const field = (i, fx, name) => {
+    const at = `data-fx="${i}" data-fx-field="${name}"`;
+    const lab = (text, control) => `<label class="fx-field"><span>${text}</span>${control}</label>`;
+    switch (name) {
+      case "value": {
+        const word = { weapon: "Bonus", armor: "Bonus", charges: "How many", score_set: "Score", score_add: "Increase", speed: "Feet", darkvision: "Feet" }[fx.kind] ?? "Bonus";
+        return lab(word, `<input type="number" ${at} data-focus="fx-${i}-value" value="${esc(fx.value)}">`);
+      }
+      case "ability": return lab("Ability", `<select ${at}>${opt([...(fx.kind === "saves" ? [["all", "All saves"]] : []), ...ABILITY_KEYS.map(a => [a, ABILITIES[a]])], fx.ability)}</select>`);
+      case "skill": return lab("Skill", `<select ${at}>${opt(SKILL_NAMES.map(k => [k, k]), fx.skill)}</select>`);
+      case "dtype": return lab("Damage type", `<select ${at}>${opt(DAMAGE_TYPES.map(t => [t, t]), fx.dtype)}</select>`);
+      case "name": return lab("Name", `<input type="text" ${at} data-focus="fx-${i}-name" value="${esc(fx.name)}">`);
+      case "dice": return lab("Damage dice", `<input type="text" ${at} data-focus="fx-${i}-dice" value="${esc(fx.dice)}" placeholder="1d8">`);
+      case "wability": return lab("Uses", `<select ${at}>${opt([["str", "Strength"], ["dex", "Dexterity"], ["finesse", "Str or Dex (finesse)"]], fx.wability)}</select>`);
+      case "atype": return lab("Type", `<select ${at}>${opt([["light", "Light armor"], ["medium", "Medium armor"], ["heavy", "Heavy armor"], ["shield", "Shield"]], fx.atype)}</select>`);
+      case "base": return fx.atype === "shield" ? "" : lab("Base AC", `<input type="number" ${at} data-focus="fx-${i}-base" value="${esc(fx.base)}">`);
+      default: return "";
+    }
+  };
+  const rows = d.effects.map((fx, i) => `<div class="fx-row">
+      <label class="fx-field"><span>Effect</span><select data-fx="${i}" data-fx-field="kind">${opt(EFFECTS.map(x => [x.kind, x.label]), fx.kind)}</select></label>
+      ${effectDef(fx.kind).fields.map(n => field(i, fx, n)).join("")}
+      <button type="button" class="link-btn" data-draft-remove-effect="${i}" aria-label="Remove this effect">Remove</button>
+    </div>`).join("");
+  return `<div class="item-draft" role="group" aria-label="Custom item">
+    <h3>${d.uid ? "Edit custom item" : "New custom item"}</h3>
+    <label class="fx-field wide"><span>Name</span><input type="text" data-draft="name" data-focus="draft-name" value="${esc(d.name)}" placeholder="Ring of Something"></label>
+    <label class="check"><input type="checkbox" data-draft="attunement" ${d.attunement ? "checked" : ""}> Requires attunement</label>
+    <label class="fx-field wide"><span>Description</span><textarea data-draft="text" data-focus="draft-text" rows="3" placeholder="What it does, for when you open it">${esc(d.text)}</textarea></label>
+    <div class="fx-list">${rows || `<p class="muted">No effects yet: it will only show its description.</p>`}</div>
+    <p><button type="button" class="btn" data-draft-add-effect>Add an effect</button></p>
+    <div class="draft-actions"><button type="button" class="btn btn-primary" data-draft-save>Save item</button> <button type="button" class="btn btn-quiet" data-draft-cancel>Cancel</button></div>
+  </div>`;
+}
+
+// Item changes can move max HP (Amulet of Health); current HP moves with it.
+function itemChange(fn) {
+  const before = computed().hp ?? 0;
+  change((p, file) => {
+    fn(p, file);
+    const after = summaryFor(file).hp ?? 0;
+    if (after !== before) p.hp.current = Math.max(0, Math.min(after, p.hp.current + (after - before)));
+  });
+}
+
+function addPackItem(id) {
+  const e = loadedPack?.items?.[id];
+  if (!e) return;
+  itemChange((p, file) => {
+    file.snapshot.items = { ...(file.snapshot.items ?? {}), [id]: e };
+    for (const g of e.grants ?? []) if (g.type === "spells") for (const sid of g.ids ?? []) if (loadedPack.spells?.[sid]) (file.snapshot.spells ??= {})[sid] = loadedPack.spells[sid];
+    const attuned = p.items.filter(it => it.attuned).length;
+    p.items.push({ uid: newUid(), ref: id, equipped: true, attuned: !!e.attunement && attuned < 3 });
+  });
+}
+
+function saveDraft() {
+  const d = ui.itemDraft;
+  const custom = { name: String(d.name ?? "").trim() || "Custom item", text: d.text ?? "", attunement: !!d.attunement, effects: d.effects.map(fx => ({ ...fx })) };
+  ui.itemDraft = null;
+  itemChange(p => {
+    const it = d.uid && p.items.find(x => x.uid === d.uid);
+    if (it) it.custom = custom;
+    else p.items.push({ uid: newUid(), custom, equipped: true, attuned: custom.attunement && p.items.filter(x => x.attuned).length < 3 });
+  });
+}
+
 function renderFeatures(s, p, f) {
   // Groups in a fixed order: each class as taken, then species, background, feats.
   const groups = new Map();
@@ -511,6 +665,7 @@ function renderFeatures(s, p, f) {
   groups.set("species", { title: `${f.snapshot.species?.[f.build.species]?.name ?? "Species"} traits`, items: [] });
   groups.set("background", { title: f.snapshot.backgrounds?.[f.build.background]?.name ?? "Background", items: [] });
   groups.set("feats", { title: "Feats", items: [] });
+  groups.set("items", { title: "Magic items", items: [] });
   groups.set("other", { title: "Other", items: [] });
   for (const feat of s.features) {
     const g = featureGroup(feat, f.snapshot);
@@ -607,7 +762,8 @@ function renderSpells(s, p, f) {
     if (sp.always_prepared) tags.push("always prepared");
     if (e?.concentration) tags.push("concentration");
     if (e?.ritual) tags.push("ritual");
-    if (sp.cast_ability && sc && sp.cast_ability !== sc.ability) tags.push(`${ABBR[sp.cast_ability]}, DC ${sp.dc}, ${signed(sp.attack)} to hit`);
+    if (sp.fixed_dc != null) tags.push(`DC ${sp.fixed_dc}${sp.fixed_attack != null ? `, ${signed(sp.fixed_attack)} to hit` : ""}`);
+    else if (sp.cast_ability && sc && sp.cast_ability !== sc.ability) tags.push(`${ABBR[sp.cast_ability]}, DC ${sp.dc}, ${signed(sp.attack)} to hit`);
     const freeKey = `${sp.id}|${sp.source}`;
     const free = sp.free_cast ? `<span class="free-cast">Free: ${pips(sp.free_cast.uses ?? 1, Math.min(p.freeCastUsed[freeKey] ?? 0, sp.free_cast.uses ?? 1), `data-free="${esc(freeKey)}"`, `Free casting of ${sp.name}`)}</span>` : "";
     return `<li class="spell-row hideable ${open ? "open" : ""}${isHidden(`row:${id}`) ? " is-hidden" : ""}">
@@ -678,6 +834,9 @@ const clampInt = (v, min, max) => Math.max(min, Math.min(max, Math.trunc(Number(
 
 function onInput(e) {
   const t = e.target;
+  // Custom item editor: typing updates the draft without a re-render.
+  if (ui.itemDraft && t.dataset.draft && t.type !== "checkbox") { ui.itemDraft[t.dataset.draft] = t.value; return; }
+  if (ui.itemDraft && t.dataset.fx != null && t.tagName !== "SELECT") { ui.itemDraft.effects[Number(t.dataset.fx)][t.dataset.fxField] = t.value; return; }
   if (t.dataset.play && (t.tagName === "TEXTAREA" || t.type === "text")) {
     change(p => setPath(p, t.dataset.play, t.value), { rerender: false });
   } else if (t.dataset.attack != null && t.dataset.field) {
@@ -689,6 +848,22 @@ function onInput(e) {
 
 function onChange(e) {
   const t = e.target;
+  if (ui.itemDraft && t.dataset.draft === "attunement") { ui.itemDraft.attunement = t.checked; return; }
+  if (ui.itemDraft && t.dataset.fx != null) {
+    const i = Number(t.dataset.fx);
+    if (t.dataset.fxField === "kind") { ui.itemDraft.effects[i] = newEffect(t.value); render(); }
+    else { ui.itemDraft.effects[i][t.dataset.fxField] = t.value; if (t.dataset.fxField === "atype") render(); }
+    return;
+  }
+  if (t.dataset.draft) return;
+  if (t.dataset.itemEquip) return itemChange(p => { const it = p.items.find(x => x.uid === t.dataset.itemEquip); if (it) it.equipped = t.checked; });
+  if (t.dataset.itemAttune) {
+    const p0 = state.file.play;
+    if (t.checked && p0.items.filter(x => x.attuned && needsAttunement(itemEntry(state.file, x))).length >= 3
+      && !confirm("You're already attuned to 3 items, the usual limit. Attune to this one anyway?")) { t.checked = false; return; }
+    return itemChange(p => { const it = p.items.find(x => x.uid === t.dataset.itemAttune); if (it) it.attuned = t.checked; });
+  }
+  if (t.matches("[data-item-pick]")) return;
   if (t.matches("[data-armor]")) return change(p => { p.armor = t.value; p.ac = null; });
   if (t.matches("[data-shield]")) return change(p => { p.shield = t.checked; });
   if (t.matches("[data-ac-method]")) return change(p => { p.acMethod = t.value; p.ac = null; });
@@ -749,6 +924,27 @@ function onClick(e) {
     if (row) p.hitDiceSpent[row.die] = clampInt((p.hitDiceSpent[row.die] ?? 0) + Number(d.hd), 0, row.count);
   });
   if (d.acReset !== undefined) return change(p => { p.ac = null; });
+  if (d.itemAdd !== undefined) {
+    const sel = root.querySelector("[data-item-pick]");
+    if (!sel?.value) { sel?.focus(); return; }
+    return addPackItem(sel.value);
+  }
+  if (d.itemCustom !== undefined) { ui.itemDraft = { uid: null, name: "", text: "", attunement: false, effects: [newEffect("ac")] }; render(); root.querySelector('[data-focus="draft-name"]')?.focus(); return; }
+  if (d.itemEdit) {
+    const it = state.file.play.items.find(x => x.uid === d.itemEdit);
+    if (it?.custom) { ui.itemDraft = { uid: it.uid, ...structuredClone(it.custom) }; render(); root.querySelector('[data-focus="draft-name"]')?.focus(); }
+    return;
+  }
+  if (d.itemRemove) {
+    const it = state.file.play.items.find(x => x.uid === d.itemRemove);
+    const name = itemEntry(state.file, it)?.name ?? "this item";
+    if (!confirm(`Remove ${name} from this character?`)) return;
+    return itemChange(p => { p.items = p.items.filter(x => x.uid !== d.itemRemove); });
+  }
+  if (d.draftAddEffect !== undefined) { ui.itemDraft.effects.push(newEffect("ac")); render(); return; }
+  if (d.draftRemoveEffect) { ui.itemDraft.effects.splice(Number(d.draftRemoveEffect), 1); render(); return; }
+  if (d.draftCancel !== undefined) { ui.itemDraft = null; render(); return; }
+  if (d.draftSave !== undefined) return saveDraft();
   if (d.addAttack !== undefined) return change(p => { p.attacks.push({ name: "", bonus: "", damage: "", notes: "" }); });
   if (d.removeAttack) return change(p => { p.attacks.splice(Number(d.removeAttack), 1); });
   if (d.hp) {

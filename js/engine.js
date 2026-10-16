@@ -166,18 +166,21 @@ function multiclassProblem(cls, scores) {
 // ---------- resolve ----------
 // Two passes: the first finds the ability increases, the second evaluates formulas
 // (resource maximums, bonuses) against the final ability scores.
-export function resolve(build, pack) {
+// `extras.items` are the magic items the sheet has active (equipped, and attuned when needed):
+// [{ key, entry }]. The builder never passes any.
+export function resolve(build, pack, extras = {}) {
   build = normalizeBuild(build);
-  const first = resolvePass(build, pack, null);
-  return resolvePass(build, pack, finalScores(build, first));
+  const first = resolvePass(build, pack, null, extras);
+  return resolvePass(build, pack, finalScores(build, first), extras);
 }
 
-function resolvePass(build, pack, scores) {
+function resolvePass(build, pack, scores, extras = {}) {
   const out = {
-    decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [] },
+    decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [], items: [] },
     features: [], proficiencies: { skill: [], save: [], armor: [], weapon: [], tool: [], language: [] },
     expertise: [], stats: {}, resources: {}, spells: [], feats: [], warnings: [], missing: new Set(),
     asi: [], notes: [], acFormulas: [], conditionalStats: [], advantages: [], resistances: [], unarmed: [], damageBonuses: [],
+    bonusList: [], abilityMods: [], weapons: [], armorItems: [],
     sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
   };
   const level = Math.min(20, Math.max(1, build.level || 1));
@@ -209,6 +212,16 @@ function resolvePass(build, pack, scores) {
     const cls = pack.classes?.[entry.id];
     if (cls) walkClass(ctx, cls, entry, i === 0);
   });
+
+  // Magic items: their grants work like a feat's; a weapon or armor block adds an attack or sets AC.
+  for (const it of extras.items ?? []) {
+    const e = it.entry;
+    if (!e) continue;
+    const scope = newScope({ path: `item.${it.key}`, step: "items", label: e.name, levelWord: "character" });
+    walk(ctx, e.grants, scope, out.decisions.items);
+    if (e.weapon) out.weapons.push({ ...e.weapon, name: e.weapon.name ?? e.name, source: e.name });
+    if (e.armor) out.armorItems.push({ ...e.armor, name: e.name, source: e.name });
+  }
 
   // Core rule: Common plus two standard languages.
   out.proficiencies.language.push({ value: "Common", source: "Every character" });
@@ -383,6 +396,14 @@ function apply(ctx, g, scope, into, classLevel) {
     case "asi":
       applyAsi(ctx, g, scope, into, source);
       break;
+    case "bonus":
+      // A flat bonus: to ac, saves, checks, initiative, spell_attack, spell_dc, hp_max, attack or damage.
+      out.bonusList.push({ to: g.to, value: evalFormula(g.value ?? 0, ctx, scope) ?? 0, abilities: g.abilities ?? null, skills: g.skills ?? null, requires: g.requires ?? null, source: scope.label });
+      break;
+    case "ability":
+      // Set a score to at least a number (Belt of Giant Strength) or raise it, past 20 up to `max` (Manual of Gainful Exercise).
+      out.abilityMods.push({ ability: g.ability, set: g.set ?? null, add: g.add ?? null, max: g.max ?? null, source: scope.label });
+      break;
     case "feat":
       applyFeat(ctx, g.id, Object.fromEntries(Object.entries(g.params ?? {}).map(([k, v]) => [k, resolveRef(v, scope)])), scope, into, source);
       break;
@@ -405,6 +426,7 @@ function addSpell(ctx, id, g, scope, source) {
     always_prepared: !!g.always_prepared,
     free_cast: g.free_cast ? { ...g.free_cast, uses: evalFormula(g.free_cast.uses ?? 1, ctx, scope) } : null,
     cast_ability: ability || null, class_spell: !!g.class_spell,
+    fixed_dc: g.dc ?? null, fixed_attack: g.attack ?? null, // items that cast with their own numbers
   });
 }
 
@@ -710,6 +732,9 @@ export function finalScores(build, res) {
     if (!d.value) continue;
     for (const [a, n] of Object.entries(asiIncrements(d.asi, d.value))) out[a] = Math.min(out[a] + n, Math.max(d.asi.cap ?? 20, out[a]));
   }
+  // Items: increases first, then "becomes N" scores, which only ever raise a score.
+  for (const m of res.abilityMods ?? []) if (m.add && out[m.ability] != null) out[m.ability] = Math.min(out[m.ability] + m.add, Math.max(m.max ?? 30, out[m.ability]));
+  for (const m of res.abilityMods ?? []) if (m.set && out[m.ability] != null) out[m.ability] = Math.max(out[m.ability], m.set);
   return out;
 }
 
@@ -725,14 +750,18 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   const skillProf = new Set(res.proficiencies.skill.map(s => s.value));
   const expert = new Set(res.expertise.map(e => e.value));
   const bonusFor = name => (res.bonuses ?? []).filter(b => b.checks.includes(name)).reduce((n, b) => n + (b.value ?? 0), 0);
+  // Flat bonuses from `bonus` grants (magic items mostly).
+  const bonusList = res.bonusList ?? [];
+  const sumBonus = pred => bonusList.filter(pred).reduce((n, b) => n + (b.value ?? 0), 0);
+  const checkBonus = (ability, skill) => sumBonus(b => b.to === "checks" && (!b.abilities || b.abilities.includes(ability)) && (!b.skills || (skill && b.skills.includes(skill))));
 
   const skills = Object.entries(SKILLS).map(([name, ab]) => {
     const prof = skillProf.has(name), exp = expert.has(name);
-    const bonus = mods[ab] + (exp ? pb * 2 : prof ? pb : 0) + bonusFor(name);
+    const bonus = mods[ab] + (exp ? pb * 2 : prof ? pb : 0) + bonusFor(name) + checkBonus(ab, name);
     return { name, ability: ab, prof, expertise: exp, bonus };
   });
   const saveProf = new Set(res.proficiencies.save.map(s => s.value));
-  const saves = ABILITY_KEYS.map(a => ({ ability: a, prof: saveProf.has(a), bonus: mods[a] + (saveProf.has(a) ? pb : 0) }));
+  const saves = ABILITY_KEYS.map(a => ({ ability: a, prof: saveProf.has(a), bonus: mods[a] + (saveProf.has(a) ? pb : 0) + sumBonus(b => b.to === "saves" && (!b.abilities || b.abilities.includes(a))) }));
 
   // Hit points: the starting class's die in full at level 1, then the fixed average of each
   // class's own die for every other level (including the first level of an added class).
@@ -743,6 +772,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     const hd0 = cls.hit_die ?? 8;
     hp = Math.max(1, hd0 + mods.con) + hpBonus;
     classes.forEach((c, i) => { hp += perLevel(c.entry.hit_die ?? 8) * (c.level - (i === 0 ? 1 : 0)); });
+    hp += sumBonus(b => b.to === "hp_max");
   }
   const hitDice = [];
   for (const c of classes) {
@@ -752,6 +782,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   }
   hitDice.sort((a, b) => b.die - a.die);
 
+  const spellDcBonus = sumBonus(b => b.to === "spell_dc"), spellAtkBonus = sumBonus(b => b.to === "spell_attack");
   // Spellcasting: one combined slot table across classes, Pact Magic kept separate.
   const casters = classes.filter(c => c.entry.spellcasting && c.entry.spellcasting.progression !== "none")
     .map(c => ({ id: c.id, name: c.entry.name, level: c.level, ...c.entry.spellcasting }));
@@ -759,10 +790,10 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     const first = casters[0];
     const pact = casters.find(c => c.progression === "pact");
     return {
-      ability: first.ability, dc: 8 + pb + mods[first.ability], attack: pb + mods[first.ability],
+      ability: first.ability, dc: 8 + pb + mods[first.ability] + spellDcBonus, attack: pb + mods[first.ability] + spellAtkBonus,
       slots: multiclassSlots(casters),
       pact: pact ? pactSlots(pact.level) : null,
-      classes: casters.map(c => ({ id: c.id, name: c.name, ability: c.ability, dc: 8 + pb + mods[c.ability], attack: pb + mods[c.ability] })),
+      classes: casters.map(c => ({ id: c.id, name: c.name, ability: c.ability, dc: 8 + pb + mods[c.ability] + spellDcBonus, attack: pb + mods[c.ability] + spellAtkBonus })),
     };
   })() : null;
 
@@ -780,9 +811,21 @@ export function summarize(build, pack, res = resolve(build, pack)) {
 
   const spells = res.spells.map(s => ({
     ...s,
-    dc: s.cast_ability ? 8 + pb + mods[s.cast_ability] : null,
-    attack: s.cast_ability ? pb + mods[s.cast_ability] : null,
+    dc: s.fixed_dc ?? (s.cast_ability ? 8 + pb + mods[s.cast_ability] + spellDcBonus : null),
+    attack: s.fixed_attack ?? (s.cast_ability ? pb + mods[s.cast_ability] + spellAtkBonus : null),
   }));
+
+  // Weapons from magic items: attack and damage worked out like any weapon, plus the item's bonus.
+  const weaponAttacks = (res.weapons ?? []).map(w => {
+    const ab = w.ability === "finesse" ? (mods.dex > mods.str ? "dex" : "str") : (ABILITY_KEYS.includes(w.ability) ? w.ability : "str");
+    const plus = w.bonus ?? 0;
+    const dmgMod = mods[ab] + plus + sumBonus(b => b.to === "damage");
+    return {
+      name: w.name, source: w.source, ability: ab, properties: w.properties ?? null,
+      attack: (w.proficient === false ? 0 : pb) + mods[ab] + plus + sumBonus(b => b.to === "attack"),
+      damage: [`${w.damage ?? "1"}${dmgMod ? signedStr(dmgMod) : ""} ${w.damage_type ?? ""}`.trim(), w.extra].filter(Boolean).join(" + "),
+    };
+  });
 
   // Armor Class: every way this character can calculate it. The sheet picks one (best by default),
   // filtered by its armor and shield toggles. "No armor" (10 + Dex) is always available.
@@ -813,9 +856,11 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   return {
     initiativeAdvantage: res.advantages.filter(a => a.on === "initiative").map(a => ({ source: a.source, note: a.vs ? `against ${a.vs}` : a.while ? `while ${a.while}` : null })),
     acOptions, unarmed, conditionalStats: res.conditionalStats, resistances: res.resistances, advantages: res.advantages,
+    acBonuses: bonusList.filter(b => b.to === "ac"), armorItems: res.armorItems ?? [], weaponAttacks, bonusList, abilityMods: res.abilityMods ?? [],
     level, scores, mods, pb, skills, saves, hp, hitDie: cls?.hit_die ?? 8, hitDice,
     classes: classes.map(c => ({ id: c.id, name: c.entry.name, level: c.level, subclass: c.subclass, subclassName: pack.subclasses?.[c.subclass]?.name ?? null })),
-    ac: Math.max(...acOptions.filter(o => o.armor === "none").map(o => o.value)), initiative: mods.dex + (res.initiativeBonus ?? 0),
+    ac: Math.max(...acOptions.filter(o => o.armor === "none").map(o => o.value)),
+    initiative: mods.dex + (res.initiativeBonus ?? 0) + sumBonus(b => b.to === "initiative") + checkBonus("dex", null),
     speed: res.stats.speed ?? 30, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
     passivePerception: 10 + skills.find(s => s.name === "Perception").bonus,
     proficiencies: res.proficiencies, features: res.features, feats: res.feats, resources, spells, spellcasting, gold,

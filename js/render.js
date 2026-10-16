@@ -2,6 +2,7 @@
 import { marked } from "./vendor/marked.esm.js";
 import DOMPurify from "./vendor/purify.es.js";
 import { profBonus, spellSlots, pactSlots, ABILITIES, ABBR } from "./rules.js";
+import { itemLine, describeItemEffects, describeGrant } from "./items.js";
 
 export const KINDS = [
   { key: "classes", one: "Class", many: "Classes", path: "classes" },
@@ -10,6 +11,7 @@ export const KINDS = [
   { key: "backgrounds", one: "Background", many: "Backgrounds", path: "backgrounds" },
   { key: "feats", one: "Feat", many: "Feats", path: "feats" },
   { key: "spells", one: "Spell", many: "Spells", path: "spells" },
+  { key: "items", one: "Magic item", many: "Magic items", path: "items" },
 ];
 
 // ---------- small helpers ----------
@@ -185,6 +187,10 @@ function renderGrant(g, ctx) {
     }
     case "choice":
       return renderChoice(g, ctx);
+    case "bonus":
+      return line("Bonus", esc(describeGrant(g)), g, levelWord);
+    case "ability":
+      return line("Ability score", esc(describeGrant(g)), g, levelWord);
     default:
       return line(titleCase(g.type), `<code>${esc(JSON.stringify(g))}</code>`, g, levelWord);
   }
@@ -362,6 +368,14 @@ export function renderEntry(kindKey, entry, pack) {
         <h2>Benefits</h2>${renderGrants(entry.grants, ctx)}
       </article>`;
     }
+    case "items": {
+      const effects = describeItemEffects(entry);
+      return `<article class="entry">${head(entry, esc(itemLine(entry)))}
+        <div class="spell-text">${md(String(entry.text ?? "").replace(/^\s*#{1,6}\s+.*\n+/, ""))}</div>
+        ${effects.length ? `<h2>On the sheet</h2><ul class="item-effects">${effects.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+          <p class="muted">These apply while the item is equipped${entry.attunement ? " and you're attuned to it" : ""}.</p>` : ""}
+      </article>`;
+    }
     case "spells": {
       const lvlLine = entry.level === 0 ? `${esc(entry.school)} cantrip` : `Level ${esc(entry.level)} ${esc(entry.school)}`;
       const comps = [].concat(entry.components ?? []).join(", ") + (entry.material ? ` (${entry.material})` : "");
@@ -387,6 +401,7 @@ export function listSecondary(kindKey, entry, pack) {
     case "spells": return `${spellLevelLabel(entry.level)}${entry.school ? ` ${entry.school.toLowerCase()}` : ""}`;
     case "subclasses": return pack.classes?.[entry.class]?.name ?? titleCase(entry.class);
     case "feats": return `${titleCase(entry.category ?? "")} feat`;
+    case "items": return itemLine(entry).split(",")[0];
     case "classes": return entry.hit_die ? `d${entry.hit_die} hit die` : "";
     case "species": return entry.speed ? `${entry.speed} ft` : "";
     default: return entry.source ?? "";
