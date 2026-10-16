@@ -204,8 +204,12 @@ function renderHome() {
 }
 
 function setChrome(section) {
-  $("#pack-status").hidden = !pack;
-  if (pack) $("#pack-version").textContent = packLabel();
+  // Always offer a way to load content, even when only a character file is open (no pack in this browser).
+  $("#pack-status").hidden = false;
+  $("#pack-version").textContent = pack ? packLabel() : "No content pack loaded";
+  $("#btn-load").textContent = pack ? "Load new pack" : "Load content pack";
+  $("#btn-load").classList.toggle("btn-primary", !pack);
+  $("#btn-remove").hidden = !pack;
   $("#topnav").hidden = false;
   const char = currentCharacter();
   const sheetLink = $("#nav-sheet");

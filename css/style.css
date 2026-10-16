@@ -81,7 +81,7 @@ code { font-size: 0.9em; }
   border-bottom: 1px solid var(--rule);
 }
 .brand { font: 700 1.35rem/1 var(--serif); color: var(--ink); text-decoration: none; }
-.pack-status[hidden] { display: none; }
+.pack-status[hidden], .pack-status .btn[hidden] { display: none; }
 .pack-status { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .pack-status #pack-version { color: var(--muted); font-size: 0.92rem; margin-right: 0.4rem; }
 
