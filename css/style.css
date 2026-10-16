@@ -828,3 +828,33 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .item-line .feature-toggle::after { display: none; }
 .item-line .feature-toggle > span:first-child { cursor: pointer; }
 .item-line .feature-toggle:hover > span:first-child { text-decoration: underline; }
+
+/* ---------- conditions ---------- */
+.conditions-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: -0.5rem 0 1.25rem; padding: 0.5rem 0.75rem;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); position: relative; }
+.conditions-bar > .label { font-size: 0.82rem; color: var(--muted); }
+.cond-list { display: flex; flex-wrap: wrap; gap: 0.4rem; flex: 1 1 auto; align-items: center; }
+.cond-wrap { position: relative; }
+.cond-chip { font: inherit; font-size: 0.92rem; font-weight: 600; padding: 0.2rem 0.7rem; border-radius: 999px; cursor: pointer;
+  background: var(--verdigris-soft); color: var(--ink); border: 1px solid var(--verdigris); }
+.cond-chip.open, .cond-chip:hover { background: var(--verdigris); color: var(--surface); }
+.cond-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: min(22rem, 86vw); padding: 0.7rem 0.85rem;
+  background: var(--surface); border: 1px solid var(--verdigris); border-radius: var(--radius-sm); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2); }
+.cond-pop ul { margin: 0.35rem 0 0.5rem; padding-left: 1.1rem; font-size: 0.92rem; }
+.cond-pop li { margin: 0.15rem 0; }
+.cond-back { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 1rem; background: rgba(20, 12, 6, 0.55); }
+.cond-modal { width: min(44rem, 100%); max-height: 90vh; overflow: auto; padding: 1.1rem 1.25rem; background: var(--surface); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+.cond-modal h2 { margin: 0 0 0.2rem; }
+.cond-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.45rem; margin: 0.6rem 0; }
+.cond-option { display: grid; gap: 0.1rem; text-align: left; font: inherit; padding: 0.45rem 0.6rem; cursor: pointer; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-sm); }
+.cond-option span { font-size: 0.82rem; color: var(--muted); }
+.cond-option:hover { border-color: var(--verdigris); }
+.cond-option.on { background: var(--verdigris); border-color: var(--verdigris); color: var(--surface); }
+.cond-option.on span { color: var(--surface); opacity: 0.85; }
+.cond-foot { display: flex; justify-content: flex-end; }
+@media (max-width: 760px) {
+  .cond-wrap { position: static; }
+  .cond-pop { left: 0.5rem; right: 0.5rem; width: auto; }
+}
+@media print { .cond-add, .cond-none { display: none !important; } .conditions-bar:not(:has(.cond-chip)) { display: none; } }

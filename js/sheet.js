@@ -4,7 +4,7 @@
 import { summarize, resolve, normalizeBuild, mergeContent, snapshotFor, titleCase } from "./engine.js";
 import { esc, md } from "./render.js";
 import { itemLine, describeItemEffects, needsAttunement, customEntry, EFFECTS, effectDef, newEffect, DAMAGE_TYPES, SKILL_NAMES } from "./items.js";
-import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal } from "./rules.js";
+import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal, CONDITIONS, CONDITION_NAMES } from "./rules.js";
 
 const OPEN_KEY = "character-builder:sheet";
 const COINS = ["cp", "sp", "ep", "gp", "pp"];
@@ -13,7 +13,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -106,6 +106,7 @@ function ensurePlay() {
   p.characterNotes ??= "";
   p.hidden ??= [];        // ids of sheet elements hidden with Edit layout
   p.items ??= [];         // magic items
+  p.conditions ??= [];    // condition names, e.g. ["Prone", "Poisoned"]
 }
 
 function startingEquipmentText() {
@@ -134,6 +135,7 @@ export function mountSheet(el) {
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
   root.addEventListener("input", onInput);
+  root.addEventListener("keydown", onKey);
   render();
 }
 export function unmountSheet() {
@@ -141,6 +143,7 @@ export function unmountSheet() {
   root.removeEventListener("click", onClick);
   root.removeEventListener("change", onChange);
   root.removeEventListener("input", onInput);
+  root.removeEventListener("keydown", onKey);
   root = null;
 }
 
@@ -212,7 +215,9 @@ function render() {
   const bg = f.snapshot.backgrounds?.[b.background];
   const exh = p.exhaustion ?? 0;
   const armorState = armorView(s, p);
-  const speed = Math.max(0, armorState.speed - 5 * exh);
+  const conds = (p.conditions ?? []).filter(c => CONDITIONS[c]);
+  const stoppedBy = conds.filter(c => CONDITIONS[c].speedZero);
+  const speed = stoppedBy.length ? 0 : Math.max(0, armorState.speed - 5 * exh);
   const ac = p.ac ?? armorState.ac;
   const hpMax = s.hp ?? 0;
 
@@ -222,7 +227,7 @@ function render() {
         <input id="ac-input" type="number" data-play="ac" data-focus="ac" value="${ac ?? ""}" placeholder="?" min="0" max="40">
         <small>${p.ac != null ? `<button type="button" class="link-btn" data-ac-reset>${armorState.ac == null ? "clear" : `reset to ${armorState.ac}`}</button>` : armorState.ac == null ? "enter armor AC" : esc(armorState.label)}</small>`),
     hz("stat:initiative", "Initiative", "stat-box", `<span class="label">Initiative</span><strong>${signed(s.initiative - 2 * exh)}</strong>${s.initiativeAdvantage.length ? `<small>${advBadge(s.initiativeAdvantage)} Advantage</small>` : ""}`),
-    hz("stat:speed", "Speed", "stat-box", `<span class="label">Speed</span><strong>${speed} ft</strong>${armorState.speedLost ? `<small>−${armorState.speedLost} ${armorState.why}</small>` : ""}${exh ? `<small>−${5 * exh} from exhaustion</small>` : ""}`),
+    hz("stat:speed", "Speed", "stat-box", `<span class="label">Speed</span><strong>${speed} ft</strong>${stoppedBy.length ? `<small>${esc(stoppedBy.join(", "))}</small>` : `${armorState.speedLost ? `<small>−${armorState.speedLost} ${armorState.why}</small>` : ""}${exh ? `<small>−${5 * exh} from exhaustion</small>` : ""}`}`),
     hz("stat:proficiency", "Proficiency", "stat-box", `<span class="label">Proficiency</span><strong>${signed(s.pb)}</strong>`),
     hz("stat:perception", "Passive Perception", "stat-box", `<span class="label">Passive Perception</span><strong>${s.passivePerception}</strong>`),
     hz("stat:size", "Size", "stat-box", `<span class="label">Size</span><strong class="small-value">${esc(s.size ?? "Medium")}</strong>${s.darkvision ? `<small>Darkvision ${s.darkvision} ft</small>` : ""}`),
@@ -347,6 +352,7 @@ function render() {
     </div>` : ""}
 
     ${statStrip ? `<section class="combat-strip" aria-label="Combat">${statStrip}</section>` : ""}
+    ${renderConditions(conds)}
 
     <div class="${gridCls}">
       ${abilities.trim() ? `<section class="abilities-col" aria-label="Abilities and skills">${abilities}</section>` : ""}
@@ -357,6 +363,7 @@ function render() {
     ${renderFeatures(s, p, f)}
 
     ${renderSpells(s, p, f)}
+    ${ui.condPicker && !ui.printing ? renderConditionPicker(conds) : ""}
 
     ${hz("panel:notes", "Notes", "panel notes-panel", `
       <h2>Notes</h2>
@@ -542,6 +549,44 @@ function renderResources(s, p) {
   ].join("");
   return hz("panel:resources", "Limited uses", "panel", `<h2>Limited uses</h2>
     ${rows ? `<ul class="resource-list">${rows}</ul>` : `<p class="muted">Everything here is hidden.</p>`}`, "section");
+}
+
+// ---------- conditions ----------
+// A bar of the conditions the character has. Clicking one shows what it does; "Add condition"
+// opens a window with every condition in alphabetical order.
+function renderConditions(conds) {
+  return hz("stat:conditions", "Conditions", "conditions-bar", `
+    <span class="label">Conditions</span>
+    <span class="cond-list">${conds.map(c => {
+      const open = ui.condOpen === c && !ui.printing;
+      return `<span class="cond-wrap"><button type="button" class="cond-chip${open ? " open" : ""}" data-cond-info="${esc(c)}" aria-expanded="${open}">${esc(c)}</button>${open ? `
+        <div class="cond-pop" role="dialog" aria-label="${esc(c)}">
+          <strong>${esc(c)}</strong>
+          <ul>${CONDITIONS[c].rules.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+          <button type="button" class="link-btn" data-cond-remove="${esc(c)}">Remove ${esc(c)}</button>
+        </div>` : ""}</span>`;
+    }).join("") || `<span class="muted cond-none">None</span>`}</span>
+    <button type="button" class="btn cond-add" data-cond-add>Add condition</button>`, "section");
+}
+
+function renderConditionPicker(conds) {
+  const has = new Set(conds);
+  return `<div class="cond-back" data-cond-back>
+    <div class="cond-modal" role="dialog" aria-modal="true" aria-labelledby="cond-title">
+      <h2 id="cond-title">Add a condition</h2>
+      <p class="muted">Click a condition to add it; click it again to take it off.</p>
+      <div class="cond-grid">${CONDITION_NAMES.map(n => `<button type="button" class="cond-option${has.has(n) ? " on" : ""}" data-cond-toggle="${esc(n)}" aria-pressed="${has.has(n)}">
+        <strong>${esc(n)}</strong><span>${esc(CONDITIONS[n].summary)}</span></button>`).join("")}</div>
+      <p class="muted cond-note">Exhaustion has its own tracker in the boxes above.</p>
+      <div class="cond-foot"><button type="button" class="btn btn-primary" data-cond-close>Done</button></div>
+    </div>
+  </div>`;
+}
+
+function onKey(e) {
+  if (e.key !== "Escape") return;
+  if (ui.condPicker) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); }
+  else if (ui.condOpen) { const c = ui.condOpen; ui.condOpen = null; render(); root.querySelector(`[data-cond-info="${CSS.escape(c)}"]`)?.focus(); }
 }
 
 // ---------- magic items ----------
@@ -882,6 +927,9 @@ function togglePip(store, key, i) {
 }
 
 function onClick(e) {
+  // Clicking the dimmed backdrop closes the conditions window; clicking anywhere else closes a condition's tip.
+  if (ui.condPicker && e.target.matches?.("[data-cond-back]")) { ui.condPicker = false; render(); return; }
+  if (ui.condOpen && !e.target.closest(".cond-wrap")) { ui.condOpen = null; if (!e.target.closest("button")) { render(); return; } }
   const t = e.target.closest("button");
   if (!t || !state) return;
   const s = computed();
@@ -924,6 +972,16 @@ function onClick(e) {
     if (row) p.hitDiceSpent[row.die] = clampInt((p.hitDiceSpent[row.die] ?? 0) + Number(d.hd), 0, row.count);
   });
   if (d.acReset !== undefined) return change(p => { p.ac = null; });
+  if (d.condAdd !== undefined) { ui.condPicker = true; ui.condOpen = null; render(); root.querySelector(".cond-option")?.focus(); return; }
+  if (d.condClose !== undefined) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); return; }
+  if (d.condToggle) {
+    const n = d.condToggle;
+    change(p => { p.conditions = p.conditions.includes(n) ? p.conditions.filter(c => c !== n) : [...p.conditions, n].sort((a, b) => a.localeCompare(b)); });
+    root.querySelector(`[data-cond-toggle="${CSS.escape(n)}"]`)?.focus();
+    return;
+  }
+  if (d.condInfo) { ui.condOpen = ui.condOpen === d.condInfo ? null : d.condInfo; render(); root.querySelector(`[data-cond-info="${CSS.escape(d.condInfo)}"]`)?.focus(); return; }
+  if (d.condRemove) { const n = d.condRemove; ui.condOpen = null; return change(p => { p.conditions = p.conditions.filter(c => c !== n); }); }
   if (d.itemAdd !== undefined) {
     const sel = root.querySelector("[data-item-pick]");
     if (!sel?.value) { sel?.focus(); return; }
