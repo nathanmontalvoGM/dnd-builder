@@ -266,7 +266,7 @@ function renderDecisions(list, { flat = false } = {}) {
 function decisionHead(d) {
   const pill = d.kind === "asi" ? "" : d.fixed ? `<span class="pill pill-set">set</span>` : `<span class="pill ${d.complete ? "pill-done" : ""}">${d.complete ? "done" : `choose ${d.choose}`}</span>`;
   return `<header class="decision-head"><h3>${esc(d.label)}</h3>${pill}</header>
-    <p class="decision-source">From ${esc(d.source)}${d.swap === "long_rest" ? ". You can change this after a long rest" : d.swap === "level_up" ? ". You can change this when you gain a level" : ""}</p>`;
+    <p class="decision-source">From ${esc(d.source)}${d.swap === "long_rest" ? ". You can change this after a long rest" : d.swap === "short_rest" ? ". You can change this after a short or long rest" : d.swap === "level_up" ? ". You can change this when you gain a level" : ""}</p>`;
 }
 
 function renderDecision(d, flat = false) {

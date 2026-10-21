@@ -982,3 +982,12 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
   background: var(--gilt-soft); border: 1px solid var(--gilt); border-radius: var(--radius-sm); }
 .cast-note > span { flex: 1 1 14rem; }
 @media print { .cast-btn, .cast-panel, .cast-note { display: none !important; } }
+
+/* ---------- picks changed on a rest ---------- */
+.rest-swap { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem 1rem; margin-bottom: 1rem; padding: 0.7rem 0.9rem;
+  background: var(--verdigris-soft); border: 1px solid var(--verdigris); border-radius: var(--radius); }
+.rest-swap > p { flex: 1 1 100%; margin: 0; }
+.rest-swap-rows { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; flex: 1 1 auto; }
+.rest-swap .field { display: grid; gap: 0.2rem; font-size: 0.9rem; min-width: 12rem; }
+.rest-swap select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.3rem 0.4rem; }
+@media print { .rest-swap { display: none !important; } }

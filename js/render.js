@@ -202,6 +202,7 @@ function renderChoice(g, ctx) {
   if (g.default) notes.push(`Default: ${prettyValue(g.default)}.`);
   if (g.swap === "level_up") notes.push("You can change this pick when you gain a level.");
   if (g.swap === "long_rest") notes.push("You can change this pick after a long rest.");
+  if (g.swap === "short_rest") notes.push("You can change this pick after a short or long rest.");
 
   let body = "";
   if (Array.isArray(g.from)) {

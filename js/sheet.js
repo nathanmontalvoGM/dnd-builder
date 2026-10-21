@@ -15,7 +15,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null, castOpen: null, lastCast: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null, castOpen: null, lastCast: null, restSwap: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -363,6 +363,7 @@ function render() {
       <p><strong>Editing layout.</strong> Hide anything you don't need during play: whole panels, groups, single features, spells or boxes. Hidden items are dimmed here and left out of the sheet and the PDF. Your layout is saved in the character file.</p>
       ${hiddenCount ? `<button type="button" class="btn" data-show-all>Show everything (${hiddenCount} hidden)</button>` : ""}
     </div>` : ""}
+    ${ui.restSwap && !ui.printing ? renderRestSwaps(f) : ""}
     ${loadedPack && loadedPack.meta?.version !== f.pack?.version ? `<div class="update-note">
       <p>Built with content pack ${esc(f.pack?.version ?? "unknown")}. The pack loaded here is ${esc(loadedPack.meta?.version)}.</p>
       <button type="button" class="btn" data-refresh-content>Update this character's content</button>
@@ -1357,6 +1358,7 @@ function onInput(e) {
 
 function onChange(e) {
   const t = e.target;
+  if (t.matches("[data-rest-swap]")) return changeRestPick(t.dataset.restSwap, t.value);
   if (ui.fxPicker && t.matches("[data-fx-others]")) { ui.fxPicker.others = t.checked; return; }
   if (ui.itemPicker && t.closest(".ip-modal")) {
     const F = ui.itemFilter;
@@ -1489,6 +1491,7 @@ function onClick(e) {
   if (d.fxInfo) { ui.fxOpen = ui.fxOpen === d.fxInfo ? null : d.fxInfo; render(); root.querySelector(`[data-fx-info="${CSS.escape(d.fxInfo)}"]`)?.focus(); return; }
   if (d.fxRemove) { const uid = d.fxRemove; ui.fxOpen = null; return removeEffects(x => x.uid === uid); }
   if (d.stateToggle) return toggleState(d.stateToggle, s);
+  if (d.restSwapDone !== undefined) { ui.restSwap = null; render(); return; }
   if (d.conc) {
     const c = ui.concCheck; ui.concCheck = null;
     if (d.conc === "lose" && c?.uids) return removeEffects(x => c.uids.includes(x.uid));
@@ -1543,11 +1546,46 @@ function onClick(e) {
   if (d.rest) return rest(d.rest, s);
 }
 
+// ---------- changing picks on a rest ----------
+// Choices marked swap: short_rest (after any rest, like the Armorer's Armor Model) or swap: long_rest
+// (after a long rest) can be changed on the sheet once the rest is done. Only one-pick choices: bigger
+// ones (prepared spells) still change through Edit in builder.
+const SWAPS_FOR = { short: ["short_rest"], long: ["short_rest", "long_rest"] };
+const flatDecisions = ds => ds.flatMap(d => [d, ...flatDecisions(d.children ?? [])]);
+function restSwaps(file, kind) {
+  // Options come from the loaded pack when there is one (Spell Mastery can pick any spell in it),
+  // otherwise from the character's own snapshot.
+  const pack = loadedPack ?? snapshotPack(file);
+  const res = resolve(file.build, pack, { items: activeItems(file), effects: activeEffects(file), states: file.play?.states ?? [] });
+  return flatDecisions(Object.values(res.decisions).flat())
+    .filter(d => SWAPS_FOR[kind].includes(d.swap) && d.choose === 1 && !d.fixed && !d.isFeat && (d.options?.length ?? 0) > 1);
+}
+
+function renderRestSwaps(f) {
+  const swaps = restSwaps(f, ui.restSwap);
+  if (!swaps.length) return "";
+  return `<div class="rest-swap" role="region" aria-label="Picks you can change now">
+    <p><strong>${ui.restSwap === "long" ? "Long" : "Short"} rest done.</strong> You can also change ${swaps.length === 1 ? "this" : "these"} now:</p>
+    <div class="rest-swap-rows">${swaps.map(d => `<label class="field"><span>${esc(d.label)} <small class="muted">${esc(d.source)}</small></span>
+      <select data-rest-swap="${esc(d.key)}">${d.value.length ? "" : `<option value="">Choose…</option>`}${d.options.map(o => `<option value="${esc(o.value)}"${d.value.includes(o.value) ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select></label>`).join("")}</div>
+    <button type="button" class="btn" data-rest-swap-done>Done</button>
+  </div>`;
+}
+
+function changeRestPick(key, value) {
+  itemChange((p, file) => {
+    file.build.choices = { ...(file.build.choices ?? {}), [key]: value ? [value] : [] };
+    // A spell picked from the loaded pack needs to be in the snapshot for its description.
+    if (value && loadedPack?.spells?.[value] && !file.snapshot.spells?.[value]) (file.snapshot.spells ??= {})[value] = loadedPack.spells[value];
+  });
+}
+
 function rest(kind, s) {
   const msg = kind === "long"
     ? "Take a long rest? You regain all hit points, hit dice and spell slots, and one level of exhaustion. Effects that last 8 hours or less end."
     : "Take a short rest? Pact slots and short-rest features come back. Spend hit dice yourself to heal. Effects that last an hour or less end.";
   if (!confirm(msg)) return;
+  ui.restSwap = kind;
   change(p => {
     const shortOnes = s.resources.filter(r => r.recharge === "short");
     for (const r of shortOnes) p.resourcesUsed[r.id] = 0;
