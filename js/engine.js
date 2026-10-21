@@ -593,6 +593,8 @@ function applyChoice(ctx, g, scope, into, classLevel, source) {
   if (forced != null) { value = [forced]; fixed = true; }
   if (!value.length && g.default != null) value = [g.default];
 
+  // A pick that mixes skills and tools (the Skilled feat) shows them as two groups.
+  if (g.each?.type === "proficiency" && g.each.kind === "auto") for (const o of options) o.group = o.value in SKILLS ? "Skills" : "Tools";
   // Skill, tool and language picks: options the character already has from somewhere else are taken.
   // One picked here that another source also gives is a duplicate to swap for something else.
   const dupes = [];

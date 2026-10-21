@@ -400,6 +400,7 @@ code { font-size: 0.9em; }
 .checklist li { display: flex; align-items: center; border-bottom: 1px solid var(--rule); }
 .checklist li:last-child { border-bottom: 0; }
 .checklist li[hidden] { display: none; }
+.checklist li.cl-group { position: sticky; top: 0; z-index: 1; display: block; padding: 0.35rem 0.75rem; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--paper); }
 .checklist label { position: relative; flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.6rem; padding: 0.45rem 0.75rem; cursor: pointer; }
 .checklist label::before { content: ""; flex: none; width: 0.9rem; height: 0.9rem; border: 1.5px solid var(--muted); border-radius: 3px; align-self: center; }
 .checklist label.selected::before { background: var(--gilt); border-color: var(--gilt); box-shadow: inset 0 0 0 2px var(--surface); }

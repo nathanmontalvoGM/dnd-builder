@@ -321,7 +321,8 @@ function renderChecklist(d) {
         <input type="search" placeholder="Search" data-search="${esc(d.key)}" data-focus="search:${esc(d.key)}" value="${esc(q)}"></label>
       <p class="count">${d.value.length} of ${d.choose} chosen</p>
     </div>
-    <ul class="checklist" data-list="${esc(d.key)}">${d.options.map(o => `
+    <ul class="checklist" data-list="${esc(d.key)}">${groupedOptions(d.options).map(o => o.head ? `
+      <li class="cl-group" data-group-head>${esc(o.head)}</li>` : `
       <li data-name="${esc(o.label.toLowerCase())}">
         <label class="${d.value.includes(o.value) ? "selected" : ""}">${inputFor(d, o)}
           <span class="cl-name">${esc(o.label)}</span>
@@ -330,6 +331,13 @@ function renderChecklist(d) {
         </label>
         ${o.link ? `<a href="${o.link}" target="_blank" rel="noopener" class="details-link">details</a>` : ""}
       </li>`).join("")}</ul>`;
+}
+
+// Options with a `group` (Skills, Tools) come out in group order, each group under a heading row.
+function groupedOptions(options) {
+  if (!options.some(o => o.group)) return options;
+  const order = [...new Set(options.map(o => o.group ?? ""))];
+  return order.flatMap(g => [{ head: g || "Other" }, ...options.filter(o => (o.group ?? "") === g)]);
 }
 
 function renderPointAsi(d) {
@@ -630,7 +638,14 @@ function filterList(key, q) {
   const list = root?.querySelector(`[data-list="${CSS.escape(key)}"]`);
   if (!list) return;
   const needle = q.trim().toLowerCase();
-  for (const li of list.children) li.hidden = !!needle && !li.dataset.name.includes(needle);
+  let head = null, any = false;
+  const closeGroup = () => { if (head) head.hidden = !any; };
+  for (const li of list.children) {
+    if (li.dataset.groupHead !== undefined) { closeGroup(); head = li; any = false; continue; }
+    li.hidden = !!needle && !li.dataset.name.includes(needle);
+    if (!li.hidden) any = true;
+  }
+  closeGroup(); // a group heading hides when the search leaves nothing under it
 }
 
 function onClick(e) {
