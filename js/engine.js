@@ -450,6 +450,7 @@ function addSpell(ctx, id, g, scope, source) {
     free_cast: g.free_cast ? { ...g.free_cast, uses: evalFormula(g.free_cast.uses ?? 1, ctx, scope) } : null,
     cast_ability: ability || null, class_spell: !!g.class_spell,
     fixed_dc: g.dc ?? null, fixed_attack: g.attack ?? null, // items that cast with their own numbers
+    from_item: scope.path.startsWith("item."), // cast from the item (its charges), not with spell slots
   });
 }
 

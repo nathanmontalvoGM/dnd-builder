@@ -961,3 +961,24 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
   .fx-actions { grid-column: 1; grid-row: auto; justify-content: flex-start; max-width: none; }
 }
 @media print { .effects-bar .cond-add, .conc-check, .fx-cast { display: none !important; } .fx-toggle:not(.on) { display: none; } }
+
+/* ---------- casting ---------- */
+.cast-btn { flex: none; margin-left: auto; padding: 0.12rem 0.65rem; font-size: 0.85rem; }
+.cast-btn.open { background: var(--verdigris); border-color: var(--verdigris); color: var(--surface); }
+.cast-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.15rem 0 0.5rem; padding: 0.5rem 0.6rem;
+  background: var(--verdigris-soft); border: 1px solid var(--verdigris); border-radius: var(--radius-sm); }
+.cast-ways { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.cast-way { display: grid; gap: 0.05rem; text-align: left; font: inherit; font-size: 0.9rem; padding: 0.3rem 0.6rem; cursor: pointer; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); }
+.cast-way small { font-size: 0.75rem; color: var(--muted); }
+.cast-way:hover:not(:disabled) { border-color: var(--verdigris); }
+.cast-way:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 1px; }
+.cast-way:disabled { opacity: 0.45; cursor: not-allowed; }
+.cast-way.quiet { background: transparent; border-style: dashed; }
+.cast-version { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
+.cast-version select { font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.2rem 0.3rem; }
+.cast-none { flex: 1 1 100%; margin: 0; font-size: 0.85rem; }
+.cast-note { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; margin: 0.6rem 0; padding: 0.45rem 0.65rem; font-size: 0.92rem;
+  background: var(--gilt-soft); border: 1px solid var(--gilt); border-radius: var(--radius-sm); }
+.cast-note > span { flex: 1 1 14rem; }
+@media print { .cast-btn, .cast-panel, .cast-note { display: none !important; } }

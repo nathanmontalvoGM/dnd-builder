@@ -15,7 +15,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null, castOpen: null, lastCast: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -710,21 +710,106 @@ function filterEffects() {
 }
 
 // Turn an effect on. `mine`: this character cast it, so a second Concentration spell of theirs
-// replaces the first.
-function addEffect(id, option, mine) {
+// replaces the first. `spend` marks the slot (or free use) in the same change, so one Undo covers both.
+// A Concentration spell with no effect block (Spirit Guardians) still goes on the bar, to track it.
+function addEffect(id, option, mine, spend = null) {
   const f = state.file;
   const sp = spellEntry(f, id);
-  if (!sp?.effect) return false;
-  const nowConc = mine && sp.concentration ? concentrating(f) : [];
+  if (!sp) return false;
+  const tracks = hasEffect(sp) || (mine && sp.concentration);
+  const nowConc = mine && sp.concentration ? concentrating(f).filter(x => x.spell !== id) : [];
   if (nowConc.length && !confirm(`You're concentrating on ${nowConc.map(x => spellEntry(f, x.spell)?.name).join(", ")}. Casting ${sp.name} ends ${nowConc.length > 1 ? "them" : "it"}. Go ahead?`)) return false;
   itemChange((p, file) => {
+    spend?.(p);
+    if (!tracks) return;
     if (loadedPack?.spells?.[id] && !file.snapshot.spells?.[id]) (file.snapshot.spells ??= {})[id] = loadedPack.spells[id];
     const drop = new Set(nowConc.map(x => x.uid));
-    p.effects = p.effects.filter(x => !drop.has(x.uid) && !(x.spell === id && (x.option ?? null) === (option ?? null)));
+    p.effects = p.effects.filter(x => !drop.has(x.uid) && !(x.spell === id && (hasEffect(sp) ? (x.option ?? null) === (option ?? null) : true)));
     p.effects.push({ uid: newUid(), spell: id, option: option ?? null, mine: !!mine });
   });
   return true;
 }
+
+// ---------- casting ----------
+// The Cast button on a spell row opens a small panel: which slot to use (only levels the spell can be
+// cast at, with what's left), a Pact slot, a free use, a ritual, or no slot at all. Casting marks the
+// slot and turns the spell's effect on in one step, with Undo.
+function castWays(sp, e, s, p) {
+  const sc = s.spellcasting;
+  const lvl = e?.level ?? sp.level ?? 0;
+  const ways = [];
+  if (lvl === 0 || sp.from_item) {
+    ways.push({ via: "none", label: sp.from_item ? `From ${sp.source}` : "Cast", sub: sp.from_item ? "uses the item's charges" : "", ok: true });
+    return ways;
+  }
+  (sc?.slots ?? []).forEach((n, i) => {
+    const L = i + 1;
+    if (L < lvl || !n) return;
+    const left = n - Math.min(p.slotsUsed[L] ?? 0, n);
+    ways.push({ via: `slot:${L}`, level: L, label: `${ordinal(L)} level`, sub: `${left} of ${n} left`, ok: left > 0 });
+  });
+  if (sc?.pact && sc.pact.level >= lvl) {
+    const left = sc.pact.count - Math.min(p.pactUsed ?? 0, sc.pact.count);
+    ways.push({ via: "pact", level: sc.pact.level, label: `Pact slot (${ordinal(sc.pact.level)})`, sub: `${left} of ${sc.pact.count} left`, ok: left > 0 });
+  }
+  if (sp.free_cast) {
+    const key = `${sp.id}|${sp.source}`, max = sp.free_cast.uses ?? 1;
+    const left = max - Math.min(p.freeCastUsed[key] ?? 0, max);
+    ways.push({ via: "free", level: lvl, key, label: "Free casting", sub: `${left} of ${max} left, from ${sp.source}`, ok: left > 0 });
+  }
+  if (e?.ritual) ways.push({ via: "ritual", level: lvl, label: "As a ritual", sub: "no slot, 10 minutes longer", ok: true });
+  ways.push({ via: "none", level: lvl, label: "Without a slot", sub: "a scroll, an item, or you already marked it", ok: true, quiet: true });
+  return ways;
+}
+
+// Which version of the effect a slot level gives (Aid: the "slot" on each option).
+function optionForSlot(e, level) {
+  const opts = effectOptions(e);
+  if (!opts?.some(o => o.slot != null)) return null;
+  let best = null;
+  opts.forEach((o, i) => { if (o.slot != null && o.slot <= level && (best == null || o.slot > opts[best].slot)) best = i; });
+  return best ?? 0;
+}
+
+const castRows = new Map(); // spell row id -> the row's spell, for the Cast buttons
+
+function renderCastPanel(sp, e, s, p, rowId) {
+  const ways = castWays(sp, e, s, p);
+  const opts = effectOptions(e);
+  const pickVersion = opts && !opts.some(o => o.slot != null);
+  const anyLeft = ways.some(w => w.ok && !w.quiet);
+  return `<div class="cast-panel" role="group" aria-label="Cast ${esc(sp.name)}">
+    ${pickVersion ? `<label class="cast-version">Version <select data-cast-version>${opts.map((o, i) => `<option value="${i}">${esc(o.name)}</option>`).join("")}</select></label>` : ""}
+    <div class="cast-ways">${ways.map(w => `<button type="button" class="cast-way${w.quiet ? " quiet" : ""}" data-cast-go="${esc(rowId)}" data-via="${esc(w.via)}"${w.key ? ` data-free-key="${esc(w.key)}"` : ""} ${w.ok ? "" : "disabled"}>
+      <strong>${esc(w.label)}</strong>${w.sub ? `<small>${esc(w.sub)}</small>` : ""}</button>`).join("")}</div>
+    ${!anyLeft && (e?.level ?? 0) > 0 && !sp.from_item ? `<p class="muted cast-none">No slots left that can cast it.</p>` : ""}
+    <button type="button" class="link-btn" data-cast-cancel>Cancel</button>
+  </div>`;
+}
+
+function castSpell(sp, via, freeKey, version) {
+  const f = state.file;
+  const e = spellEntry(f, sp.id);
+  const s = computed();
+  const way = castWays(sp, e, s, f.play).find(w => w.via === via && (via !== "free" || w.key === freeKey));
+  if (!way?.ok) return;
+  const level = way.level ?? e?.level ?? 0;
+  const option = hasEffect(e) && effectOptions(e) ? optionForSlot(e, level) ?? version ?? 0 : null;
+  const p0 = f.play;
+  const before = structuredClone({ slotsUsed: p0.slotsUsed, pactUsed: p0.pactUsed, freeCastUsed: p0.freeCastUsed, effects: p0.effects });
+  const spend = p => {
+    if (via.startsWith("slot:")) { const L = Number(via.slice(5)); p.slotsUsed[L] = (p.slotsUsed[L] ?? 0) + 1; }
+    else if (via === "pact") p.pactUsed = (p.pactUsed ?? 0) + 1;
+    else if (via === "free") p.freeCastUsed[freeKey] = (p.freeCastUsed[freeKey] ?? 0) + 1;
+  };
+  ui.castOpen = null;
+  const how = via.startsWith("slot:") ? ` with a ${ordinal(level)}-level slot (${Number(way.sub.split(" ")[0]) - 1} left)` : via === "pact" ? ` with a Pact slot` : via === "free" ? " with its free casting" : via === "ritual" ? " as a ritual" : "";
+  const fx = hasEffect(e) ? ` ${effectName(e, option)} is on.` : e?.concentration ? " You're concentrating on it." : "";
+  if (!addEffect(sp.id, option, true, spend)) { render(); return; }
+  ui.lastCast = { text: `Cast ${e?.name ?? sp.name}${how}.${fx}`, before };
+  render();
+}
+
 const removeEffects = pred => itemChange(p => { p.effects = p.effects.filter(x => !pred(x)); });
 
 // Switching a state on uses one of its uses when it has them (entering a Rage spends a Rage).
@@ -948,6 +1033,7 @@ function onKey(e) {
     if (q?.value) { q.value = ""; ui.fxPicker.q = ""; filterEffects(); } else closeEffectPicker();
     return;
   }
+  if (ui.castOpen && e.key === "Escape") { const id = ui.castOpen; ui.castOpen = null; render(); root.querySelector(`[data-cast="${CSS.escape(id)}"]`)?.focus(); return; }
   if (ui.fxOpen && e.key === "Escape") { const u = ui.fxOpen; ui.fxOpen = null; render(); root.querySelector(`[data-fx-info="${CSS.escape(u)}"]`)?.focus(); return; }
   if (e.key !== "Escape") return;
   if (ui.condPicker) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); }
@@ -1163,6 +1249,7 @@ function renderSpells(s, p, f) {
     return `<div class="slot-group"><span class="label">${ordinal(i + 1)}</span>${pips(n, used, `data-slot="${i + 1}"`, `${ordinal(i + 1)}-level slot`)}</div>`;
   }).join("")) : sc?.pact ? hz("spells:slots", "Pact slots", "slot-row", `<div class="slot-group"><span class="label">Pact slots (${ordinal(sc.pact.level)})</span>${pips(sc.pact.count, Math.min(p.pactUsed, sc.pact.count), 'data-pact', "Pact slot")}</div>`) : "";
 
+  castRows.clear();
   const spellRow = sp => {
     const e = f.snapshot.spells?.[sp.id];
     const id = `s:${sp.id}|${sp.sources[0]}`;
@@ -1177,6 +1264,9 @@ function renderSpells(s, p, f) {
     if (sp.fixed_dc != null) tags.push(`DC ${sp.fixed_dc}${sp.fixed_attack != null ? `, ${signed(sp.fixed_attack)} to hit` : ""}`);
     else if (sp.cast_ability && sc && sp.cast_ability !== sc.ability) tags.push(`${ABBR[sp.cast_ability]}, DC ${sp.dc}, ${signed(sp.attack)} to hit`);
     const freeKey = `${sp.id}|${sp.source}`;
+    const castable = !ui.printing && !editing() && (sp.level > 0 || hasEffect(e) || e?.concentration);
+    castRows.set(id, sp);
+    const casting = ui.castOpen === id && castable;
     const free = sp.free_cast ? `<span class="free-cast">Free: ${pips(sp.free_cast.uses ?? 1, Math.min(p.freeCastUsed[freeKey] ?? 0, sp.free_cast.uses ?? 1), `data-free="${esc(freeKey)}"`, `Free casting of ${sp.name}`)}</span>` : "";
     return `<li class="spell-row hideable ${open ? "open" : ""}${isHidden(`row:${id}`) ? " is-hidden" : ""}">
       <div class="spell-line">
@@ -1187,12 +1277,13 @@ function renderSpells(s, p, f) {
           ${tags.length ? `<span class="spell-tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</span>` : ""}
         </button>
         ${free}
+        ${castable ? `<button type="button" class="btn cast-btn${casting ? " open" : ""}" data-cast="${esc(id)}" aria-expanded="${casting}">Cast</button>` : ""}
       </div>
+      ${casting ? renderCastPanel(sp, e, s, p, id) : ""}
       ${open ? `<div class="feature-body">
         ${e ? `<p class="muted">${esc([e.level === 0 ? `${e.school} cantrip` : `Level ${e.level} ${String(e.school ?? "").toLowerCase()}`, [].concat(e.components ?? []).join(", ") + (e.material ? ` (${e.material})` : ""), `${e.concentration ? "Concentration, " : ""}${e.duration ?? ""}`].filter(Boolean).join("; "))}</p>${md(String(e.text ?? "").replace(/^\s*#{1,6}\s+.*\n+/, ""))}` : `<p class="muted">This spell isn't in the content snapshot, so there's no description.</p>`}
         <p class="muted">From ${esc(sp.sources.join(" and "))}</p>
-        ${hasEffect(e) && !ui.printing ? `<p class="fx-cast"><button type="button" class="btn" data-fx-cast="${esc(sp.id)}">${on ? "Cast again" : effectOptions(e) ? "Turn on…" : "Turn on"}</button>
-          <span class="muted">${esc(describeEffect(e, effectOptions(e) ? 0 : null).slice(0, 2).join(" · "))}${effectOptions(e) ? " (pick a version)" : ""}</span></p>` : ""}
+        ${hasEffect(e) ? `<p class="fx-cast muted">When cast: ${esc(describeEffect(e, effectOptions(e) ? 0 : null).slice(0, 2).join(" · "))}${effectOptions(e) ? ` (${effectOptions(e).some(o => o.slot != null) ? "more from a higher slot" : "you pick a version"})` : ""}</p>` : ""}
       </div>` : ""}
     </li>`;
   };
@@ -1211,6 +1302,7 @@ function renderSpells(s, p, f) {
       <div><span class="label">Save DC</span><strong>${c.dc}</strong></div>
       <div><span class="label">Attack</span><strong>${signed(c.attack)}${diceTag(sc.attackDice)}</strong></div>`)).join("") : ""}
     ${slotRow}
+    ${ui.lastCast && !ui.printing ? `<div class="cast-note" role="status"><span>${esc(ui.lastCast.text)}</span><button type="button" class="btn" data-cast-undo>Undo</button><button type="button" class="link-btn" data-cast-dismiss aria-label="Dismiss">OK</button></div>` : ""}
     ${levelGroups || `<p class="muted">Everything here is hidden.</p>`}`, "section");
 }
 
@@ -1379,13 +1471,20 @@ function onClick(e) {
     if (addEffect(d.fxPick, opt, mine) && ui.fxPicker) { ui.fxPicker.added = effectName(sp, opt); render(); }
     return;
   }
-  if (d.fxCast) {
-    // From a spell row: no versions, so it goes straight on; with versions, the window opens on it.
-    const sp = spellEntry(state.file, d.fxCast);
-    if (effectOptions(sp)) { ui.fxPicker = { q: sp.name, others: false, added: null }; render(); root.querySelector("[data-fx-q]")?.focus(); return; }
-    addEffect(d.fxCast, null, true);
+  if (d.cast) { ui.castOpen = ui.castOpen === d.cast ? null : d.cast; render(); root.querySelector(`[data-cast-go="${CSS.escape(d.cast)}"]:not([disabled])`)?.focus(); return; }
+  if (d.castCancel !== undefined) { const id = ui.castOpen; ui.castOpen = null; render(); if (id) root.querySelector(`[data-cast="${CSS.escape(id)}"]`)?.focus(); return; }
+  if (d.castGo) {
+    const sp = castRows.get(d.castGo);
+    const version = t.closest(".cast-panel")?.querySelector("[data-cast-version]")?.value;
+    if (sp) castSpell(sp, d.via, d.freeKey ?? null, version != null ? Number(version) : null);
     return;
   }
+  if (d.castUndo !== undefined) {
+    const b = ui.lastCast?.before; ui.lastCast = null;
+    if (b) return itemChange(p => { Object.assign(p, structuredClone(b)); });
+    render(); return;
+  }
+  if (d.castDismiss !== undefined) { ui.lastCast = null; render(); return; }
   if (d.fxInfo) { ui.fxOpen = ui.fxOpen === d.fxInfo ? null : d.fxInfo; render(); root.querySelector(`[data-fx-info="${CSS.escape(d.fxInfo)}"]`)?.focus(); return; }
   if (d.fxRemove) { const uid = d.fxRemove; ui.fxOpen = null; return removeEffects(x => x.uid === uid); }
   if (d.stateToggle) return toggleState(d.stateToggle, s);
@@ -1457,7 +1556,7 @@ function rest(kind, s) {
     p.pactUsed = 0;
     p.states = []; // Rage and the like end with any rest
     p.effects = (p.effects ?? []).filter(x => !endsOnRest(spellEntry(state.file, x.spell), kind));
-    ui.concCheck = null;
+    ui.concCheck = null; ui.lastCast = null; ui.castOpen = null;
     // Effects that ended (Aid) can lower the Hit Point maximum, so heal to the new one.
     const maxNow = summaryFor(state.file).hp ?? p.hp.current;
     p.hp.current = Math.min(p.hp.current, maxNow);
