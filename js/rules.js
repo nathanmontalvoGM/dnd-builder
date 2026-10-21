@@ -81,3 +81,48 @@ export const CONDITIONS = {
   Unconscious: { speedZero: true, summary: "Out cold: Incapacitated and Prone.", rules: ["You have the Incapacitated and Prone conditions, and you drop whatever you're holding. When this condition ends, you remain Prone.", "Your Speed is 0 and can't increase.", "Attack rolls against you have Advantage.", "You automatically fail Strength and Dexterity saving throws.", "Any attack roll that hits you is a Critical Hit if the attacker is within 5 feet of you.", "You're unaware of your surroundings."] },
 };
 export const CONDITION_NAMES = Object.keys(CONDITIONS).sort((a, b) => a.localeCompare(b));
+
+// ---------- weapons and Weapon Mastery (2024) ----------
+// name -> [simple|martial, melee|ranged, mastery property, finesse, light]
+const W = (cat, range, mastery, finesse = false, light = false) => ({ category: cat, range, mastery, finesse, light });
+export const WEAPONS = {
+  Club: W("simple", "melee", "Slow", false, true), Dagger: W("simple", "melee", "Nick", true, true), Greatclub: W("simple", "melee", "Push"),
+  Handaxe: W("simple", "melee", "Vex", false, true), Javelin: W("simple", "melee", "Slow"), "Light Hammer": W("simple", "melee", "Nick", false, true),
+  Mace: W("simple", "melee", "Sap"), Quarterstaff: W("simple", "melee", "Topple"), Sickle: W("simple", "melee", "Nick", false, true), Spear: W("simple", "melee", "Sap"),
+  Dart: W("simple", "ranged", "Vex", true), "Light Crossbow": W("simple", "ranged", "Slow"), Shortbow: W("simple", "ranged", "Vex"), Sling: W("simple", "ranged", "Slow"),
+  Battleaxe: W("martial", "melee", "Topple"), Flail: W("martial", "melee", "Sap"), Glaive: W("martial", "melee", "Graze"), Greataxe: W("martial", "melee", "Cleave"),
+  Greatsword: W("martial", "melee", "Graze"), Halberd: W("martial", "melee", "Cleave"), Lance: W("martial", "melee", "Topple"), Longsword: W("martial", "melee", "Sap"),
+  Maul: W("martial", "melee", "Topple"), Morningstar: W("martial", "melee", "Sap"), Pike: W("martial", "melee", "Push"), Rapier: W("martial", "melee", "Vex", true),
+  Scimitar: W("martial", "melee", "Nick", true, true), Shortsword: W("martial", "melee", "Vex", true, true), Trident: W("martial", "melee", "Topple"),
+  Warhammer: W("martial", "melee", "Push"), "War Pick": W("martial", "melee", "Sap"), Whip: W("martial", "melee", "Slow", true),
+  Blowgun: W("martial", "ranged", "Vex"), "Hand Crossbow": W("martial", "ranged", "Vex", false, true), "Heavy Crossbow": W("martial", "ranged", "Push"),
+  Longbow: W("martial", "ranged", "Slow"), Musket: W("martial", "ranged", "Slow"), Pistol: W("martial", "ranged", "Vex"),
+};
+
+// What each mastery property does, in short.
+export const MASTERY = {
+  Cleave: "Once per turn, when you hit with a melee attack, you can attack a second creature within 5 feet of the first and within your reach. On a hit it takes the weapon's damage, without your ability modifier unless that's negative.",
+  Graze: "When your attack misses a creature, it still takes damage equal to the ability modifier you used for the attack, of the weapon's damage type.",
+  Nick: "The extra attack from the Light property can be part of the Attack action instead of a Bonus Action, once per turn.",
+  Push: "When you hit a Large or smaller creature, you can push it up to 10 feet straight away from you.",
+  Sap: "When you hit a creature, it has Disadvantage on its next attack roll before the start of your next turn.",
+  Slow: "When you hit and deal damage, you can reduce the creature's Speed by 10 feet until the start of your next turn (no more than 10 feet from several hits).",
+  Topple: "When you hit a creature, you can make it succeed on a Constitution save (DC 8 + the attack's ability modifier + your Proficiency Bonus) or fall Prone.",
+  Vex: "When you hit and deal damage, you have Advantage on your next attack roll against that creature before the end of your next turn.",
+};
+
+// Is a weapon covered by these proficiency entries? ("Simple", "Martial", "Martial (Finesse or Light)", "Longsword"...)
+export function weaponProficient(name, profs) {
+  const w = WEAPONS[name];
+  if (!w) return false;
+  return profs.some(p => {
+    const t = String(p).toLowerCase();
+    if (t === "simple" || t === "simple weapons") return w.category === "simple";
+    if (t === "martial" || t === "martial weapons") return w.category === "martial";
+    const m = t.match(/^martial \((.+)\)$/); // Martial (Finesse or Light), Martial (Light)
+    if (m) return w.category === "martial" && ((/finesse/.test(m[1]) && w.finesse) || (/light/.test(m[1]) && w.light) || (/ranged/.test(m[1]) && w.range === "ranged") || (/melee/.test(m[1]) && w.range === "melee"));
+    if (t === "martial ranged") return w.category === "martial" && w.range === "ranged";
+    if (t === "martial melee") return w.category === "martial" && w.range === "melee";
+    return t === name.toLowerCase() || t === `${name.toLowerCase()}s`;
+  });
+}

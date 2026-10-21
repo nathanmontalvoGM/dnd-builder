@@ -997,3 +997,13 @@ li.expert .dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--verdigr
 .rest-swap .field { display: grid; gap: 0.2rem; font-size: 0.9rem; min-width: 12rem; }
 .rest-swap select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 0.3rem 0.4rem; }
 @media print { .rest-swap { display: none !important; } }
+
+/* ---------- Weapon Mastery ---------- */
+.mastery-row { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; margin: 0.6rem 0 0.8rem; }
+.mastery-row > .label { font-size: 0.82rem; color: var(--muted); }
+.mastery-chip { font-weight: 500; }
+.mastery-prop { font-weight: 700; }
+.mastery-tag { display: inline-block; margin-left: 0.4rem; padding: 0 0.45rem; font: 600 0.72rem/1.5 var(--sans); color: var(--verdigris); background: var(--verdigris-soft); border-radius: 999px; vertical-align: 0.1em; cursor: help; }
+.attack-table td .mastery-tag { margin: 0.2rem 0 0; }
+.rest-swap-menus { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+@media print { .mastery-chip { pointer-events: none; } }

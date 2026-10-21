@@ -6,7 +6,7 @@ import { esc, md } from "./render.js";
 import { itemLine, describeItemEffects, needsAttunement, customEntry, EFFECTS, effectDef, newEffect, DAMAGE_TYPES, SKILL_NAMES,
   ITEM_TYPES, RARITIES, rarityRank, EFFECT_KINDS, itemEffectKinds, itemPrice, canAttune } from "./items.js";
 import { hasEffect, effectOptions, selfOnly, effectEntry, effectName, effectConditions, describeEffect, endsOnRest } from "./effects.js";
-import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal, CONDITIONS, CONDITION_NAMES } from "./rules.js";
+import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal, CONDITIONS, CONDITION_NAMES, MASTERY } from "./rules.js";
 
 const OPEN_KEY = "character-builder:sheet";
 const COINS = ["cp", "sp", "ep", "gp", "pp"];
@@ -15,7 +15,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null, castOpen: null, lastCast: null, restSwap: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null, castOpen: null, lastCast: null, restSwap: null, masteryOpen: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -536,6 +536,30 @@ function renderDefenses(s) {
 
 const uniq = arr => [...new Set(arr.map(x => x.value ?? x))];
 
+// Weapon Mastery: which mastered weapon an attack row is, from its name ("Longsword", "+1 longsword",
+// "Hand crossbow"). Longer names first, so "Hand Crossbow" wins over "Crossbow"-like matches.
+function masteryFor(s, text) {
+  const t = ` ${String(text ?? "").toLowerCase()} `;
+  return (s.masteries ?? []).slice().sort((a, b) => b.weapon.length - a.weapon.length)
+    .find(m => t.includes(m.weapon.toLowerCase()) || t.includes(`${m.weapon.toLowerCase()}s`)) ?? null;
+}
+const masteryTag = m => (m ? `<span class="mastery-tag" title="${esc(`${m.property}: ${MASTERY[m.property] ?? ""}`)}">${esc(m.property)}</span>` : "");
+
+function renderMasteries(s) {
+  const list = s.masteries ?? [];
+  if (!list.length) return "";
+  return `<div class="mastery-row"><span class="label">Weapon Mastery</span><span class="cond-list">${list.map(m => {
+    const open = ui.masteryOpen === m.weapon && !ui.printing;
+    return `<span class="cond-wrap"><button type="button" class="cond-chip mastery-chip${open ? " open" : ""}" data-mastery="${esc(m.weapon)}" aria-expanded="${open}">${esc(m.weapon)} <span class="mastery-prop">${esc(m.property ?? "")}</span></button>${open ? `
+      <div class="cond-pop" role="dialog" aria-label="${esc(m.weapon)} mastery">
+        <strong>${esc(m.property)}</strong>
+        <p>${esc(MASTERY[m.property] ?? "")}</p>
+        ${m.dc ? `<p><b>Save DC ${m.dc}</b> (${esc(ABILITIES[m.ability])} attacks).</p>` : ""}
+        <p class="muted">${esc(m.weapon)}, from ${esc(m.sources.join(" and "))}. You can change one after a Long Rest.</p>
+      </div>` : ""}</span>`;
+  }).join("")}</span></div>`;
+}
+
 function renderAttacks(s, p) {
   const u = s.unarmed;
   return hz("panel:attacks", "Weapons and attacks", "panel", `<h2>Weapons and attacks</h2>
@@ -543,19 +567,20 @@ function renderAttacks(s, p) {
       <th scope="row">${esc(u.name)}</th><td>${signed(u.attack)}${diceTag(u.attackDice)}</td><td>${esc([`${u.damage} ${u.type}`, ...(u.extraDice ?? [])].join(" + "))}</td>
       <td class="muted">${esc([u.source !== "Core rules" ? `${u.source}, ${ABILITIES[u.ability]}` : ABILITIES[u.ability], ...u.notes].join("; "))}</td>
     </tr>${(s.weaponAttacks ?? []).map(w => `<tr class="item-attack">
-      <th scope="row">${esc(w.name)}</th><td>${signed(w.attack)}${diceTag(w.attackDice)}</td><td>${esc(w.damage)}</td>
+      <th scope="row">${esc(w.name)}${masteryTag(masteryFor(s, `${w.name} ${w.source ?? ""}`))}</th><td>${signed(w.attack)}${diceTag(w.attackDice)}</td><td>${esc(w.damage)}</td>
       <td class="muted">${esc([ABILITIES[w.ability], w.properties].filter(Boolean).join("; "))}</td>
     </tr>`).join("")}</tbody></table>
     ${p.attacks.length ? `<table class="attack-table">
       <thead><tr><th scope="col">Name</th><th scope="col">Attack</th><th scope="col">Damage</th><th scope="col">Notes</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
       <tbody>${p.attacks.map((a, i) => `<tr>
-        <td><input type="text" data-attack="${i}" data-field="name" data-focus="atk-${i}-name" value="${esc(a.name)}" aria-label="Attack name"></td>
+        <td><input type="text" data-attack="${i}" data-field="name" data-focus="atk-${i}-name" value="${esc(a.name)}" aria-label="Attack name">${masteryTag(masteryFor(s, a.name))}</td>
         <td><input type="text" data-attack="${i}" data-field="bonus" data-focus="atk-${i}-bonus" value="${esc(a.bonus)}" aria-label="Attack bonus" class="narrow"></td>
         <td><input type="text" data-attack="${i}" data-field="damage" data-focus="atk-${i}-damage" value="${esc(a.damage)}" aria-label="Damage"></td>
         <td><input type="text" data-attack="${i}" data-field="notes" data-focus="atk-${i}-notes" value="${esc(a.notes)}" aria-label="Notes"></td>
         <td><button type="button" class="link-btn" data-remove-attack="${i}" aria-label="Remove ${esc(a.name || "attack")}">Remove</button></td>
       </tr>`).join("")}</tbody></table>` : `<p class="muted attack-hint">Add your weapons here. Attack bonus is your Strength or Dexterity modifier plus your proficiency bonus if you're trained with it.</p>`}
     ${attackEffectNote(s)}
+    ${renderMasteries(s)}
     <button type="button" class="btn" data-add-attack>Add an attack</button>`, "section");
 }
 
@@ -1035,6 +1060,7 @@ function onKey(e) {
     return;
   }
   if (ui.castOpen && e.key === "Escape") { const id = ui.castOpen; ui.castOpen = null; render(); root.querySelector(`[data-cast="${CSS.escape(id)}"]`)?.focus(); return; }
+  if (ui.masteryOpen && e.key === "Escape") { const m = ui.masteryOpen; ui.masteryOpen = null; render(); root.querySelector(`[data-mastery="${CSS.escape(m)}"]`)?.focus(); return; }
   if (ui.fxOpen && e.key === "Escape") { const u = ui.fxOpen; ui.fxOpen = null; render(); root.querySelector(`[data-fx-info="${CSS.escape(u)}"]`)?.focus(); return; }
   if (e.key !== "Escape") return;
   if (ui.condPicker) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); }
@@ -1358,7 +1384,9 @@ function onInput(e) {
 
 function onChange(e) {
   const t = e.target;
-  if (t.matches("[data-rest-swap]")) return changeRestPick(t.dataset.restSwap, t.value);
+  if (t.matches("[data-rest-swap]")) return changeRestPick(t.dataset.restSwap, t.value, Number(t.dataset.slot ?? 0));
+  // Leaving an attack's name box: redraw so its Weapon Mastery tag follows the new name.
+  if (t.dataset.attack != null && t.dataset.field === "name") return render();
   if (ui.fxPicker && t.matches("[data-fx-others]")) { ui.fxPicker.others = t.checked; return; }
   if (ui.itemPicker && t.closest(".ip-modal")) {
     const F = ui.itemFilter;
@@ -1409,6 +1437,7 @@ function onClick(e) {
   if (ui.condPicker && e.target.matches?.("[data-cond-back]")) { ui.condPicker = false; render(); return; }
   if (ui.itemPicker && e.target.matches?.("[data-ip-back]")) { closeItemPicker(); return; }
   if (ui.fxPicker && e.target.matches?.("[data-fx-back]")) { closeEffectPicker(); return; }
+  if (ui.masteryOpen && !e.target.closest(".cond-wrap")) { ui.masteryOpen = null; if (!e.target.closest("button")) { render(); return; } }
   if (ui.fxOpen && !e.target.closest(".cond-wrap")) { ui.fxOpen = null; if (!e.target.closest("button")) { render(); return; } }
   if (ui.condOpen && !e.target.closest(".cond-wrap")) { ui.condOpen = null; if (!e.target.closest("button")) { render(); return; } }
   const t = e.target.closest("button");
@@ -1491,6 +1520,7 @@ function onClick(e) {
   if (d.fxInfo) { ui.fxOpen = ui.fxOpen === d.fxInfo ? null : d.fxInfo; render(); root.querySelector(`[data-fx-info="${CSS.escape(d.fxInfo)}"]`)?.focus(); return; }
   if (d.fxRemove) { const uid = d.fxRemove; ui.fxOpen = null; return removeEffects(x => x.uid === uid); }
   if (d.stateToggle) return toggleState(d.stateToggle, s);
+  if (d.mastery) { ui.masteryOpen = ui.masteryOpen === d.mastery ? null : d.mastery; render(); root.querySelector(`[data-mastery="${CSS.escape(d.mastery)}"]`)?.focus(); return; }
   if (d.restSwapDone !== undefined) { ui.restSwap = null; render(); return; }
   if (d.conc) {
     const c = ui.concCheck; ui.concCheck = null;
@@ -1558,7 +1588,7 @@ function restSwaps(file, kind) {
   const pack = loadedPack ?? snapshotPack(file);
   const res = resolve(file.build, pack, { items: activeItems(file), effects: activeEffects(file), states: file.play?.states ?? [] });
   return flatDecisions(Object.values(res.decisions).flat())
-    .filter(d => SWAPS_FOR[kind].includes(d.swap) && d.choose === 1 && !d.fixed && !d.isFeat && (d.options?.length ?? 0) > 1);
+    .filter(d => SWAPS_FOR[kind].includes(d.swap) && (d.choose === 1 || !d.isSpell) && !d.fixed && !d.isFeat && (d.options?.length ?? 0) > d.choose);
 }
 
 function renderRestSwaps(f) {
@@ -1566,15 +1596,22 @@ function renderRestSwaps(f) {
   if (!swaps.length) return "";
   return `<div class="rest-swap" role="region" aria-label="Picks you can change now">
     <p><strong>${ui.restSwap === "long" ? "Long" : "Short"} rest done.</strong> You can also change ${swaps.length === 1 ? "this" : "these"} now:</p>
-    <div class="rest-swap-rows">${swaps.map(d => `<label class="field"><span>${esc(d.label)} <small class="muted">${esc(d.source)}</small></span>
-      <select data-rest-swap="${esc(d.key)}">${d.value.length ? "" : `<option value="">Choose…</option>`}${d.options.map(o => `<option value="${esc(o.value)}"${d.value.includes(o.value) ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select></label>`).join("")}</div>
+    <div class="rest-swap-rows">${swaps.map(d => {
+      // One menu per pick; each lists the options not picked in the other menus.
+      const slots = Array.from({ length: d.choose }, (_, i) => d.value[i] ?? "");
+      return `<div class="field rest-swap-pick"><span>${esc(d.label)} <small class="muted">${esc(d.source)}</small></span>
+        <div class="rest-swap-menus">${slots.map((v, i) => `<select data-rest-swap="${esc(d.key)}" data-slot="${i}" aria-label="${esc(d.label)} ${i + 1}">${v ? "" : `<option value="">Choose…</option>`}${d.options
+          .filter(o => o.value === v || !slots.includes(o.value)).map(o => `<option value="${esc(o.value)}"${o.value === v ? " selected" : ""}>${esc(o.label)}${o.sub ? ` (${esc(o.sub.split(" · ")[0])})` : ""}</option>`).join("")}</select>`).join("")}</div></div>`;
+    }).join("")}</div>
     <button type="button" class="btn" data-rest-swap-done>Done</button>
   </div>`;
 }
 
-function changeRestPick(key, value) {
+function changeRestPick(key, value, slot = 0) {
   itemChange((p, file) => {
-    file.build.choices = { ...(file.build.choices ?? {}), [key]: value ? [value] : [] };
+    const picks = [...(file.build.choices?.[key] ?? [])];
+    picks[slot] = value;
+    file.build.choices = { ...(file.build.choices ?? {}), [key]: [...new Set(picks.filter(Boolean))] };
     // A spell picked from the loaded pack needs to be in the snapshot for its description.
     if (value && loadedPack?.spells?.[value] && !file.snapshot.spells?.[value]) (file.snapshot.spells ??= {})[value] = loadedPack.spells[value];
   });

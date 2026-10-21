@@ -3,7 +3,7 @@
 // It never mutates the build; the UI re-runs resolve() after every change.
 import {
   ABILITY_KEYS, ABILITIES, SKILLS, STANDARD_ARRAY, POINT_BUY, STANDARD_LANGUAGES,
-  mod, profBonus, pactSlots, maxSpellLevel, multiclassSlots,
+  mod, profBonus, pactSlots, maxSpellLevel, multiclassSlots, WEAPONS, weaponProficient,
 } from "./rules.js";
 
 // Capitalize each word ("alchemist's supplies" -> "Alchemist's Supplies", not "Alchemist'S").
@@ -184,7 +184,7 @@ function resolvePass(build, pack, scores, extras = {}, prior = null) {
     features: [], proficiencies: { skill: [], save: [], armor: [], weapon: [], tool: [], language: [] },
     expertise: [], stats: {}, resources: {}, spells: [], feats: [], warnings: [], missing: new Set(),
     asi: [], notes: [], acFormulas: [], conditionalStats: [], advantages: [], resistances: [], unarmed: [], damageBonuses: [],
-    bonusList: [], abilityMods: [], weapons: [], armorItems: [], acMin: [], statMult: {}, toggles: [],
+    bonusList: [], abilityMods: [], weapons: [], armorItems: [], acMin: [], statMult: {}, toggles: [], masteries: [],
     sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
   };
   const level = Math.min(20, Math.max(1, build.level || 1));
@@ -421,6 +421,10 @@ function apply(ctx, g, scope, into, classLevel) {
         abilities: g.abilities ?? null, skills: g.skills ?? null, requires: g.requires ?? null, source: scope.label });
       break;
     }
+    case "weapon_mastery":
+      // Mastery of named weapon kinds: { type: weapon_mastery, values: [Longsword] }
+      for (const v of g.values ?? []) out.masteries.push({ weapon: v, property: WEAPONS[v]?.mastery ?? null, source });
+      break;
     case "ac_min":
       // "Your AC can't be less than 17" (Barkskin).
       out.acMin.push({ value: evalFormula(g.value ?? 10, ctx, scope) ?? 10, source: scope.label });
@@ -520,6 +524,19 @@ function queryOptions(ctx, q, scope) {
     // Expertise picks from skills you're proficient in, so it's empty until those are chosen.
     return { options, waiting: !options.length && q.proficient ? "Choose your skill proficiencies first." : null };
   }
+  if (q.pool === "weapons") {
+    // The 2024 weapon table. range: melee|ranged, category: simple|martial, proficient: true = only
+    // weapons the character is proficient with (Rogue, Paladin, Ranger Weapon Mastery).
+    const profs = (ctx.prior ?? out).proficiencies.weapon.map(x => x.value);
+    return {
+      options: Object.entries(WEAPONS)
+        .filter(([, w]) => !q.range || w.range === q.range)
+        .filter(([, w]) => !q.category || w.category === q.category)
+        .filter(([n]) => !q.proficient || weaponProficient(n, profs))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([n, w]) => ({ value: n, label: n, sub: `${w.mastery} · ${titleCase(w.category)} ${w.range}` })),
+    };
+  }
   if (q.pool === "spells") {
     const lists = asArray(val("lists")).filter(Boolean);
     if (q.lists && !lists.length) return { options: [], waiting: "Choose a spell list first." };
@@ -595,6 +612,11 @@ function applyChoice(ctx, g, scope, into, classLevel, source) {
 
   // A pick that mixes skills and tools (the Skilled feat) shows them as two groups.
   if (g.each?.type === "proficiency" && g.each.kind === "auto") for (const o of options) o.group = o.value in SKILLS ? "Skills" : "Tools";
+  // Weapon Mastery picks: a weapon another class already masters is marked (taking it again does nothing).
+  if (g.each?.type === "weapon_mastery") {
+    const elsewhere = new Map(((ctx.prior ?? ctx.out).masteries ?? []).filter(m => m.key !== key).map(m => [m.weapon, m.source]));
+    for (const o of options) if (elsewhere.has(o.value) && !value.includes(o.value)) { o.taken = true; o.note = `Already mastered (${elsewhere.get(o.value)})`; }
+  }
   // Skill, tool and language picks: options the character already has from somewhere else are taken.
   // One picked here that another source also gives is a duplicate to swap for something else.
   const dupes = [];
@@ -639,6 +661,7 @@ function applyEach(ctx, each, value, scope, into, source, choiceKey) {
       break;
     }
     case "expertise": out.expertise.push({ value, source }); break;
+    case "weapon_mastery": out.masteries.push({ weapon: value, property: WEAPONS[value]?.mastery ?? null, source, key: choiceKey }); break;
     case "feat": applyFeat(ctx, value, Object.fromEntries(Object.entries(each.params ?? {}).map(([k, v]) => [k, resolveRef(v, scope)])), { ...scope, path: choiceKey }, into, source); break;
     case "stat": out.stats[each.stat] = value; break;
     default: break;
@@ -797,6 +820,18 @@ export function finalScores(build, res) {
 }
 
 // ---------- the computed character ----------
+// Weapon Mastery as the sheet shows it: one row per weapon kind, with Topple's save DC worked out
+// from the ability that weapon attacks with (Finesse: the better of Str and Dex; ranged: Dex).
+function masteryList(list, mods, pb) {
+  const seen = new Map();
+  for (const m of list) if (!seen.has(m.weapon)) seen.set(m.weapon, { ...m, sources: [m.source] }); else seen.get(m.weapon).sources.push(m.source);
+  return [...seen.values()].sort((a, b) => a.weapon.localeCompare(b.weapon)).map(m => {
+    const w = WEAPONS[m.weapon];
+    const ab = !w ? "str" : w.finesse ? (mods.dex > mods.str ? "dex" : "str") : w.range === "ranged" ? "dex" : "str";
+    return { weapon: m.weapon, property: m.property, sources: m.sources, ability: ab, dc: m.property === "Topple" ? 8 + mods[ab] + pb : null };
+  });
+}
+
 export function summarize(build, pack, res = resolve(build, pack)) {
   build = normalizeBuild(build);
   const level = Math.min(20, build.level || 1);
@@ -930,6 +965,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
 
   return {
     initiativeAdvantage: res.advantages.filter(a => a.on === "initiative").map(a => ({ source: a.source, note: a.vs ? `against ${a.vs}` : a.while ? `while ${a.while}` : null })),
+    masteries: masteryList(res.masteries ?? [], mods, pb),
     toggles: res.toggles ?? [], acOptions, acMin, unarmed, conditionalStats: res.conditionalStats, resistances: res.resistances, advantages: res.advantages,
     acBonuses: bonusList.filter(b => b.to === "ac"), armorItems: res.armorItems ?? [], weaponAttacks, bonusList, abilityMods: res.abilityMods ?? [],
     level, scores, mods, pb, skills, saves, hp, hitDie: cls?.hit_die ?? 8, hitDice,
