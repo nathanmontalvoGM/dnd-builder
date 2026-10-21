@@ -415,7 +415,7 @@ function apply(ctx, g, scope, into, classLevel) {
       // A dice value ("1d4", "-1d4") is rolled at the table: Bless, Bane, Divine Favor. `attack_rolls`
       // means every attack roll (weapons, Unarmed Strike, spells); `attack` only weapon attacks.
       const dice = typeof g.value === "string" && /^[+-]?\d*d\d+$/i.test(g.value.trim()) ? g.value.trim() : null;
-      out.bonusList.push({ to: g.to, value: dice ? 0 : evalFormula(g.value ?? 0, ctx, scope) ?? 0, dice, damage_type: g.damage_type ?? null, note: g.note ?? null, unarmed: !!g.unarmed,
+      out.bonusList.push({ to: g.to, value: dice ? 0 : evalFormula(g.value ?? 0, ctx, scope) ?? 0, dice, damage_type: g.damage_type ?? null, note: g.note ?? null, unarmed: !!g.unarmed, unskilled: !!g.unskilled,
         abilities: g.abilities ?? null, skills: g.skills ?? null, requires: g.requires ?? null, source: scope.label });
       break;
     }
@@ -511,12 +511,12 @@ function queryOptions(ctx, q, scope) {
     // e.g. Skill Expert's Expertise pick lists only skills you're proficient in without Expertise.
     const prof = new Set(out.proficiencies.skill.map(x => x.value));
     const exp = new Set(out.expertise.map(x => x.value));
-    return {
-      options: Object.keys(SKILLS)
-        .filter(n => q.proficient == null || prof.has(n) === !!q.proficient)
-        .filter(n => q.expertise == null || exp.has(n) === !!q.expertise)
-        .map(n => ({ value: n, label: n })),
-    };
+    const options = Object.keys(SKILLS)
+      .filter(n => q.proficient == null || prof.has(n) === !!q.proficient)
+      .filter(n => q.expertise == null || exp.has(n) === !!q.expertise)
+      .map(n => ({ value: n, label: n }));
+    // Expertise picks from skills you're proficient in, so it's empty until those are chosen.
+    return { options, waiting: !options.length && q.proficient ? "Choose your skill proficiencies first." : null };
   }
   if (q.pool === "spells") {
     const lists = asArray(val("lists")).filter(Boolean);
@@ -529,6 +529,7 @@ function queryOptions(ctx, q, scope) {
         .filter(([, s]) => q.level == null || s.level === q.level)
         .filter(([, s]) => q.min_level == null || s.level >= q.min_level)
         .filter(([, s]) => q.max_level == null || s.level <= q.max_level)
+        .filter(([, s]) => q.ritual == null || !!s.ritual === !!q.ritual)
         .filter(([id]) => !(q.exclude_known && alwaysHave.has(id)))
         .sort(([, a], [, b]) => (a.level - b.level) || a.name.localeCompare(b.name))
         .map(([id, s]) => ({ value: id, label: s.name, sub: s.level === 0 ? `${s.school ?? ""} cantrip` : `Level ${s.level} ${String(s.school ?? "").toLowerCase()}`, link: `#/spells/${id}`, level: s.level, note: have.has(id) ? "You already know this spell" : null })),
@@ -570,7 +571,19 @@ function applyChoice(ctx, g, scope, into, classLevel, source) {
   let options = [], waiting = null;
   if (Array.isArray(g.from)) options = g.from.map(v => ({ value: v, label: prettyValue(v) }));
   else if (g.from) ({ options, waiting } = queryOptions(ctx, g.from, scope));
-  else if (g.options) options = g.options.map(o => ({ value: o.id, label: o.name, text: o.text }));
+  else if (g.options) options = g.options.map(o => ({ value: o.id, label: o.name, text: o.text, prereq: o.prereq ?? null }));
+  const choose = Math.max(0, typeof g.choose === "string" ? evalFormula(g.choose, ctx, scope) ?? 1 : g.choose ?? 1);
+  // An option's prerequisite is shown as a note (warn, don't block): a minimum class level, or another
+  // option of the same choice (Thirsting Blade needs Pact of the Blade).
+  const lvlNow = scope.classLevel ?? ctx.level; // the class's current level (classLevel is the level the choice came at)
+  const picked = new Set(asArray(build.choices[key]));
+  for (const o of options) {
+    if (!o.prereq) continue;
+    const need = [];
+    if (o.prereq.level && lvlNow < o.prereq.level) need.push(`level ${o.prereq.level}`);
+    if (o.prereq.option && !picked.has(o.prereq.option)) need.push(options.find(x => x.value === o.prereq.option)?.label ?? o.prereq.option);
+    if (need.length) o.note = `Requires ${need.join(" and ")}`;
+  }
 
   let value = asArray(build.choices[key]).filter(v => options.some(o => o.value === v));
   let fixed = false;
@@ -580,7 +593,7 @@ function applyChoice(ctx, g, scope, into, classLevel, source) {
 
   const d = makeDecision({
     key, kind: "choice", step: scope.step, source, level: classLevel, label: g.label ?? titleCase(g.id),
-    choose: g.choose ?? 1, value, options, fixed, waiting, swap: g.swap, isNamed: !!g.options, isSpell: g.from?.pool === "spells",
+    choose, value, options, fixed, waiting, swap: g.swap, isNamed: !!g.options, isSpell: g.from?.pool === "spells",
     isFeat: g.from?.pool === "feats",
   });
   into.push(d);
@@ -777,7 +790,9 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   // Flat bonuses from `bonus` grants (magic items mostly).
   const bonusList = res.bonusList ?? [];
   const sumBonus = pred => bonusList.filter(pred).reduce((n, b) => n + (b.value ?? 0), 0);
-  const checkFits = (b, ability, skill) => b.to === "checks" && (!b.abilities || b.abilities.includes(ability)) && (!b.skills || (skill && b.skills.includes(skill)));
+  // `unskilled`: only skill checks the character isn't proficient in (Jack of All Trades).
+  const checkFits = (b, ability, skill) => b.to === "checks" && (!b.abilities || b.abilities.includes(ability)) && (!b.skills || (skill && b.skills.includes(skill)))
+    && (!b.unskilled || (skill && !skillProf.has(skill)));
   const checkBonus = (ability, skill) => sumBonus(b => checkFits(b, ability, skill));
   // Dice bonuses as text to add after a number: ["+1d4"], ["-1d4"].
   const diceFor = pred => bonusList.filter(b => b.dice && pred(b)).map(b => (/^[+-]/.test(b.dice) ? b.dice : `+${b.dice}`).replace(/^-/, "−"));
@@ -901,6 +916,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     ac: Math.max(...acOptions.filter(o => o.armor === "none").map(o => o.value)),
     initiative: mods.dex + (res.initiativeBonus ?? 0) + sumBonus(b => b.to === "initiative") + checkBonus("dex", null),
     initiativeDice: diceFor(b => b.to === "initiative" || checkFits(b, "dex", null)),
+    attuneMax: res.stats.attune_max ?? 3,
     speed: Math.floor((res.stats.speed ?? 30) * (res.statMult?.speed ?? 1)), speedMult: res.statMult?.speed ?? 1, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
     passivePerception: 10 + skills.find(s => s.name === "Perception").bonus,
     proficiencies: res.proficiencies, features: res.features, feats: res.feats, resources, spells, spellcasting, gold,

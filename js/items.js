@@ -6,7 +6,7 @@ export const DAMAGE_TYPES = ["Acid", "Bludgeoning", "Cold", "Fire", "Force", "Li
 const RARITY = { common: "Common", uncommon: "Uncommon", rare: "Rare", very_rare: "Very rare", legendary: "Legendary", artifact: "Artifact" };
 const TYPE = { armor: "armor", potion: "potion", ring: "ring", rod: "rod", scroll: "scroll", staff: "staff", wand: "wand", weapon: "weapon", wondrous: "wondrous item" };
 const signed = n => (n >= 0 ? `+${n}` : `${n}`);
-const REQ = { no_armor: "while you wear no armor", no_shield: "while you use no shield", unarmored: "while you wear no armor and use no shield", no_heavy_armor: "unless you wear heavy armor" };
+const REQ = { no_armor: "while you wear no armor", no_shield: "while you use no shield", unarmored: "while you wear no armor and use no shield", no_heavy_armor: "unless you wear heavy armor", armored: "while you wear armor" };
 
 export const needsAttunement = e => !!e?.attunement;
 

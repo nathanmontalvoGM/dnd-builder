@@ -457,7 +457,7 @@ function armorView(s, p) {
   const armored = armorType !== "none";
   const shield = !!shieldItem || !!p.shield;
   const fails = req => ({
-    no_armor: armored, no_heavy_armor: armorType === "heavy", no_shield: shield, unarmored: armored || shield,
+    no_armor: armored, no_heavy_armor: armorType === "heavy", no_shield: shield, unarmored: armored || shield, armored: !armored,
   })[req] ?? false;
   const shieldAc = shield ? 2 + (shieldItem?.bonus ?? 0) : 0;
   const bonuses = (s.acBonuses ?? []).filter(b => !b.requires || !fails(b.requires));
@@ -1077,7 +1077,7 @@ function renderItems(s, p, f) {
     ${!packItems.length && !items.length ? `<p class="muted">Load a content pack with items to pick from it, or make a custom item for DM loot.</p>` : ""}
     ${ui.itemDraft ? renderItemDraft() : ""}`;
   return hz("panel:items", "Magic items", "items-panel", `<div class="equip-sub"><h3>Magic items</h3>
-      ${anyAttune ? `<span class="attune-count${attuned > 3 ? " over" : ""}" title="Most characters can attune to 3 items at once">Attuned ${attuned} / 3</span>` : ""}</div>
+      ${anyAttune ? `<span class="attune-count${attuned > s.attuneMax ? " over" : ""}" title="How many magic items you can attune to at once">Attuned ${attuned} / ${s.attuneMax}</span>` : ""}</div>
     ${rows ? `<ul class="item-list">${rows}</ul>` : items.length ? `<p class="muted">Everything here is hidden.</p>` : `<p class="muted">No magic items yet.</p>`}
     ${add}`);
 }
@@ -1138,7 +1138,7 @@ function addPackItem(id) {
     file.snapshot.items = { ...(file.snapshot.items ?? {}), [id]: e };
     for (const g of e.grants ?? []) if (g.type === "spells") for (const sid of g.ids ?? []) if (loadedPack.spells?.[sid]) (file.snapshot.spells ??= {})[sid] = loadedPack.spells[sid];
     const attuned = p.items.filter(it => it.attuned).length;
-    p.items.push({ uid: newUid(), ref: id, equipped: true, attuned: !!e.attunement && attuned < 3 });
+    p.items.push({ uid: newUid(), ref: id, equipped: true, attuned: !!e.attunement && attuned < summaryFor(file).attuneMax });
   });
 }
 
@@ -1149,7 +1149,7 @@ function saveDraft() {
   itemChange(p => {
     const it = d.uid && p.items.find(x => x.uid === d.uid);
     if (it) it.custom = custom;
-    else p.items.push({ uid: newUid(), custom, equipped: true, attuned: custom.attunement && p.items.filter(x => x.attuned).length < 3 });
+    else p.items.push({ uid: newUid(), custom, equipped: true, attuned: custom.attunement && p.items.filter(x => x.attuned).length < computed().attuneMax });
   });
 }
 
@@ -1380,8 +1380,9 @@ function onChange(e) {
   if (t.dataset.itemEquip) return itemChange(p => { const it = p.items.find(x => x.uid === t.dataset.itemEquip); if (it) it.equipped = t.checked; });
   if (t.dataset.itemAttune) {
     const p0 = state.file.play;
-    if (t.checked && p0.items.filter(x => x.attuned && needsAttunement(itemEntry(state.file, x))).length >= 3
-      && !confirm("You're already attuned to 3 items, the usual limit. Attune to this one anyway?")) { t.checked = false; return; }
+    const limit = computed().attuneMax;
+    if (t.checked && p0.items.filter(x => x.attuned && needsAttunement(itemEntry(state.file, x))).length >= limit
+      && !confirm(`You're already attuned to ${limit} items, your limit. Attune to this one anyway?`)) { t.checked = false; return; }
     return itemChange(p => { const it = p.items.find(x => x.uid === t.dataset.itemAttune); if (it) it.attuned = t.checked; });
   }
   if (t.matches("[data-armor]")) return change(p => { p.armor = t.value; p.ac = null; });
