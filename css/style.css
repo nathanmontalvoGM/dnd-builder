@@ -386,6 +386,11 @@ code { font-size: 0.9em; }
 .chip:hover { border-color: var(--verdigris); }
 .chip.selected { border-color: var(--gilt); background: var(--gilt-soft); }
 .chip:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+/* A skill you already have from elsewhere, and one picked twice */
+.chip.taken > span { text-decoration: line-through; }
+.chip-note { display: block; font-size: 0.72rem; color: var(--muted); }
+.chip.dupe { border-color: var(--danger); }
+.chip.dupe .chip-note { color: var(--danger); font-weight: 600; }
 .count { font-size: 0.9rem; color: var(--muted); margin: 0.45rem 0 0; }
 
 .checklist-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-bottom: 0.5rem; }

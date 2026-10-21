@@ -173,10 +173,12 @@ function multiclassProblem(cls, scores) {
 export function resolve(build, pack, extras = {}) {
   build = normalizeBuild(build);
   const first = resolvePass(build, pack, null, extras);
-  return resolvePass(build, pack, finalScores(build, first), extras);
+  // The second pass also knows every proficiency the first found, so a skill pick can tell what
+  // the character already has from anywhere (a background's Skilled feat comes before class skills).
+  return resolvePass(build, pack, finalScores(build, first), extras, first);
 }
 
-function resolvePass(build, pack, scores, extras = {}) {
+function resolvePass(build, pack, scores, extras = {}, prior = null) {
   const out = {
     decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [], items: [], effects: [] },
     features: [], proficiencies: { skill: [], save: [], armor: [], weapon: [], tool: [], language: [] },
@@ -186,7 +188,7 @@ function resolvePass(build, pack, scores, extras = {}) {
     sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
   };
   const level = Math.min(20, Math.max(1, build.level || 1));
-  const ctx = { build, pack, out, level, states: new Set(extras.states ?? []), scores: scores ?? Object.fromEntries(ABILITY_KEYS.map(a => [a, baseScores(build)[a] ?? 10])) };
+  const ctx = { build, pack, out, level, prior, states: new Set(extras.states ?? []), scores: scores ?? Object.fromEntries(ABILITY_KEYS.map(a => [a, baseScores(build)[a] ?? 10])) };
 
   // Species first (2024 order is class, background, species, but nothing depends on order here).
   const species = build.species && pack.species?.[build.species];
@@ -591,11 +593,27 @@ function applyChoice(ctx, g, scope, into, classLevel, source) {
   if (forced != null) { value = [forced]; fixed = true; }
   if (!value.length && g.default != null) value = [g.default];
 
+  // Skill, tool and language picks: options the character already has from somewhere else are taken.
+  // One picked here that another source also gives is a duplicate to swap for something else.
+  const dupes = [];
+  if (g.each?.type === "proficiency") {
+    const kinds = g.each.kind === "auto" ? ["skill", "tool"] : [g.each.kind];
+    const elsewhere = new Map();
+    for (const k of kinds) for (const pr of (ctx.prior ?? ctx.out).proficiencies[k] ?? []) if (pr.key !== key && !elsewhere.has(pr.value)) elsewhere.set(pr.value, pr.source);
+    for (const o of options) {
+      const src = elsewhere.get(o.value);
+      if (!src) continue;
+      if (value.includes(o.value)) { o.note = `Also from ${src}. Pick another.`; dupes.push({ value: o.label, source: src }); }
+      else { o.taken = true; o.note = `Already from ${src}`; }
+    }
+  }
+
   const d = makeDecision({
     key, kind: "choice", step: scope.step, source, level: classLevel, label: g.label ?? titleCase(g.id),
     choose, value, options, fixed, waiting, swap: g.swap, isNamed: !!g.options, isSpell: g.from?.pool === "spells",
     isFeat: g.from?.pool === "feats",
   });
+  if (dupes.length) { d.dupes = dupes; d.complete = false; }
   into.push(d);
   scope.choices.set(g.id, value);
 
@@ -615,7 +633,7 @@ function applyEach(ctx, each, value, scope, into, source, choiceKey) {
     case "proficiency": {
       // kind "auto" lets one pick mix skills and tools (the Skilled feat).
       const kind = each.kind === "auto" ? (value in SKILLS ? "skill" : "tool") : each.kind;
-      out.proficiencies[kind]?.push({ value, source });
+      out.proficiencies[kind]?.push({ value, source, key: choiceKey }); // key: which pick gave it
       break;
     }
     case "expertise": out.expertise.push({ value, source }); break;
@@ -718,7 +736,8 @@ function computeWarnings(ctx) {
 
   for (const d of allDecisions(out)) {
     if (d.complete) continue;
-    if (d.kind === "asi") w.push({ step: d.step, text: `${d.label}: not assigned yet.` });
+    if (d.dupes?.length) w.push({ step: d.step, text: `${d.label}: you already have ${d.dupes.map(x => `${x.value} (from ${x.source})`).join(" and ")}. Pick another.` });
+    else if (d.kind === "asi") w.push({ step: d.step, text: `${d.label}: not assigned yet.` });
     else if (d.waiting) w.push({ step: d.step, text: `${d.label}: ${d.waiting}` });
     else if (d.options.length < d.choose) w.push({ step: d.step, text: `${d.label}: this pack only has ${d.options.length} option${d.options.length === 1 ? "" : "s"}, but you need ${d.choose}.` });
     else w.push({ step: d.step, text: `${d.label}: ${d.value.length} of ${d.choose} chosen.` });

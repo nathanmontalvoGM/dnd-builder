@@ -293,12 +293,13 @@ function inputFor(d, o) {
   const type = d.choose === 1 ? "radio" : "checkbox";
   const checked = d.value.includes(o.value);
   const full = !checked && d.choose > 1 && d.value.length >= d.choose;
-  return `<input type="${type}" name="${esc(d.key)}" data-key="${esc(d.key)}" data-choose="${d.choose}" value="${esc(o.value)}" ${checked ? "checked" : ""} ${full ? "disabled" : ""}>`;
+  const taken = !checked && o.taken; // already a proficiency from somewhere else
+  return `<input type="${type}" name="${esc(d.key)}" data-key="${esc(d.key)}" data-choose="${d.choose}" value="${esc(o.value)}" ${checked ? "checked" : ""} ${full || taken ? "disabled" : ""}>`;
 }
 
 function renderChips(d) {
   return `<div class="chip-group">${d.options.map(o => `
-    <label class="chip ${d.value.includes(o.value) ? "selected" : ""}">${inputFor(d, o)}<span>${esc(o.label)}</span></label>`).join("")}</div>
+    <label class="chip ${d.value.includes(o.value) ? "selected" : ""}${o.taken && !d.value.includes(o.value) ? " taken" : ""}${o.note && d.value.includes(o.value) ? " dupe" : ""}"${o.note ? ` title="${esc(o.note)}"` : ""}>${inputFor(d, o)}<span>${esc(o.label)}</span>${o.note ? `<small class="chip-note">${esc(o.note)}</small>` : ""}</label>`).join("")}</div>
     ${d.choose > 1 ? `<p class="count">${d.value.length} of ${d.choose} chosen</p>` : ""}`;
 }
 

@@ -698,6 +698,9 @@
   [data-skin="retro"] .pick-card.selected .pick-name::before, [data-skin="retro"] .option-card.selected .option-name::before { color: #f0cf6a; }
   [data-skin="retro"] .pick-card.selected :is(.pick-sub, .option-text, .muted), [data-skin="retro"] .option-card.selected :is(.option-text, .muted, p) { color: #f3e2b8; }
   [data-skin="retro"] .chip.selected { background: linear-gradient(#7a1414, #3d0606); border: 2px solid #b8962e; color: #f0cf6a; text-shadow: 1px 1px 0 #000; }
+  [data-skin="retro"] .chip-note { font: 11px var(--body); color: #5a4a36; text-shadow: none; }
+  [data-skin="retro"] .chip.dupe { border-color: #ff8a70; }
+  [data-skin="retro"] .chip.dupe .chip-note { color: #ffd0c0; }
 
   /* character summary: ability crests */
   [data-skin="retro"] .live-summary .scores { gap: 6px 4px; }
