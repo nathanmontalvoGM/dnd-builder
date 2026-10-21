@@ -857,6 +857,26 @@
   [data-skin="retro"] .cond-pop > strong { display: block; margin: 0 -10px 4px; padding: 3px 10px; font: 15px/1.3 var(--label); color: #fff; text-shadow: 1px 1px 0 #000;
     background: linear-gradient(var(--bar-top), var(--bar-bottom)); border-bottom: 1px solid #000; }
   [data-skin="retro"] .cond-pop ul { font: 14px/1.45 var(--body); }
+  [data-skin="retro"] .effects-bar { margin-top: -6px; }
+  [data-skin="retro"] .fx-chip.conc { border-color: #f0cf6a; box-shadow: 0 0 0 1px #000; }
+  [data-skin="retro"] .conc-mark { border-radius: 0; font: bold 11px/1.3 var(--sans); color: #3d0606; background: #f0cf6a; text-shadow: none; }
+  [data-skin="retro"] .fx-toggle { border-radius: 0; font: 14px/1.3 var(--label); color: #5a4a36; background: linear-gradient(#fffbeb, #e6d6ad); border: 2px outset #c8b58a; }
+  [data-skin="retro"] .fx-toggle .insp-dot { width: 14px; height: 14px; border: 2px solid #8b0000; outline: 0; }
+  [data-skin="retro"] .fx-toggle.on { color: #fff; text-shadow: 1px 1px 0 #000; background: linear-gradient(#b32424, #5c0909); border: 2px inset #b8962e; }
+  [data-skin="retro"] .fx-toggle.on .insp-dot { background: radial-gradient(circle at 35% 30%, #fff6b0, #e0b420 55%, #8a6400); border-color: #f0cf6a; }
+  [data-skin="retro"] .conc-note { font: 13px var(--body); color: #5a4a36; }
+  [data-skin="retro"] .conc-check { border-radius: 0; font: 14px var(--body); background: #fff3c4; border: 2px solid #b8962e; }
+  [data-skin="retro"] .dice-bonus { font: bold 12px var(--sans); color: #8b0000; }
+  [data-skin="retro"] .fx-attack-note, [data-skin="retro"] .fx-cast .muted { font: 13px var(--body); color: #5a4a36; }
+  [data-skin="retro"] .fx-results { background: #fbf6e6; border: 2px solid #6b5333; padding: 0 8px; }
+  [data-skin="retro"] .fx-group { font: 15px/1.2 var(--label); color: #7a0e0e; text-transform: none; letter-spacing: 0; border-bottom: 1px dotted #b8962e; }
+  [data-skin="retro"] .fx-row { border-bottom: 1px dotted #c8b58a; }
+  [data-skin="retro"] .fx-row-head strong { font: 16px/1.2 var(--body); color: #1a0a04; }
+  [data-skin="retro"] .fx-row-head .muted { font: 12px var(--body); color: #5a4a36; }
+  [data-skin="retro"] .fx-lines { font: 13px/1.35 var(--body); color: #7a0e0e; }
+  [data-skin="retro"] .fx-others { font: 14px var(--body); }
+  [data-skin="retro"] .fx-modal { height: min(46rem, 92vh); }
+  @media (max-width: 600px) { [data-skin="retro"] .fx-modal { height: 100dvh; } }
   [data-skin="retro"] .cond-back { background: rgba(10, 6, 2, 0.6); }
   [data-skin="retro"] .cond-modal { padding: 0 12px 12px; background: #fbf6e6 url("../assets/retro/parchment.png"); border: 3px double var(--box-border); outline: 1px solid #000; box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.4) !important; }
   [data-skin="retro"] .cond-modal h2 { margin: 0 -12px 8px; padding: 4px 12px; font: 17px/1.3 var(--label); color: #fff; text-shadow: 1px 1px 0 #000;

@@ -167,7 +167,9 @@ function multiclassProblem(cls, scores) {
 // Two passes: the first finds the ability increases, the second evaluates formulas
 // (resource maximums, bonuses) against the final ability scores.
 // `extras.items` are the magic items the sheet has active (equipped, and attuned when needed):
-// [{ key, entry }]. The builder never passes any.
+// [{ key, entry }]. `extras.effects` are spell effects turned on during play (Bless, Mage Armor):
+// [{ key, entry: { name, grants } }]. `extras.states` are the `while:` states switched on during play
+// ("Raging", "in Large Form"): what depends on them then applies for real. The builder never passes these.
 export function resolve(build, pack, extras = {}) {
   build = normalizeBuild(build);
   const first = resolvePass(build, pack, null, extras);
@@ -176,15 +178,15 @@ export function resolve(build, pack, extras = {}) {
 
 function resolvePass(build, pack, scores, extras = {}) {
   const out = {
-    decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [], items: [] },
+    decisions: { class: [], background: [], species: [], abilities: [], spells: [], details: [], items: [], effects: [] },
     features: [], proficiencies: { skill: [], save: [], armor: [], weapon: [], tool: [], language: [] },
     expertise: [], stats: {}, resources: {}, spells: [], feats: [], warnings: [], missing: new Set(),
     asi: [], notes: [], acFormulas: [], conditionalStats: [], advantages: [], resistances: [], unarmed: [], damageBonuses: [],
-    bonusList: [], abilityMods: [], weapons: [], armorItems: [],
+    bonusList: [], abilityMods: [], weapons: [], armorItems: [], acMin: [], statMult: {}, toggles: [],
     sources: { classes: new Set(), subclasses: new Set(), species: new Set(), backgrounds: new Set(), feats: new Set(), spells: new Set() },
   };
   const level = Math.min(20, Math.max(1, build.level || 1));
-  const ctx = { build, pack, out, level, scores: scores ?? Object.fromEntries(ABILITY_KEYS.map(a => [a, baseScores(build)[a] ?? 10])) };
+  const ctx = { build, pack, out, level, states: new Set(extras.states ?? []), scores: scores ?? Object.fromEntries(ABILITY_KEYS.map(a => [a, baseScores(build)[a] ?? 10])) };
 
   // Species first (2024 order is class, background, species, but nothing depends on order here).
   const species = build.species && pack.species?.[build.species];
@@ -221,6 +223,13 @@ function resolvePass(build, pack, scores, extras = {}) {
     walk(ctx, e.grants, scope, out.decisions.items);
     if (e.weapon) out.weapons.push({ ...e.weapon, name: e.weapon.name ?? e.name, source: e.name });
     if (e.armor) out.armorItems.push({ ...e.armor, name: e.name, source: e.name });
+  }
+
+  // Spell effects active on the character: their grants work the same way.
+  for (const fx of extras.effects ?? []) {
+    if (!fx.entry) continue;
+    const scope = newScope({ path: `effect.${fx.key}`, step: "effects", label: fx.entry.name, levelWord: "character" });
+    walk(ctx, fx.entry.grants, scope, out.decisions.effects);
   }
 
   // Core rule: Common plus two standard languages.
@@ -351,7 +360,11 @@ function apply(ctx, g, scope, into, classLevel) {
       }
       const variant = g.by_choice ? asArray(scope.choices.get(g.by_choice))[0] : null;
       const lvl = scope.classLevel ?? ctx.level;
+      // `while: Raging`: this only applies in that state. The sheet lists each state as a toggle; once
+      // it's on, the resistances, advantages and damage below count for real.
       const cond = g.while ?? null;
+      if (cond && !out.toggles.some(t => t.state === cond)) out.toggles.push({ state: cond, name: g.name, source, key: `${scope.path}/${g.name}`, on: ctx.states.has(cond) });
+      const live = w => (w && ctx.states.has(w) ? null : w);
       const stats = (g.stats ?? []).map(st => ({ label: st.label, value: evalTemplate(st.value, ctx, scope) }));
       const die = g.dice ? diceAt(g.dice, lvl) : null;
       out.features.push({
@@ -359,10 +372,10 @@ function apply(ctx, g, scope, into, classLevel) {
         action: g.action, uses: g.uses ? { ...g.uses, max: evalFormula(g.uses.max, ctx, scope) } : null,
         dice: g.dice, die, stats, while: cond, bonus: g.bonus, key: `${scope.path}/${g.name}`, level: classLevel ?? null,
       });
-      for (const a of g.advantage ?? []) out.advantages.push({ ...a, source: g.name, while: a.while ?? cond });
-      if (g.resistances?.length) out.resistances.push({ damage: g.resistances, source: g.name, while: cond });
+      for (const a of g.advantage ?? []) out.advantages.push({ ...a, source: g.name, while: live(a.while ?? cond) });
+      if (g.resistances?.length) out.resistances.push({ damage: g.resistances, source: g.name, while: live(cond) });
       if (g.unarmed_strike) out.unarmed.push({ source: g.name, die: evalTemplate(g.unarmed_strike.die, ctx, scope), abilities: g.unarmed_strike.abilities ?? ["str"] });
-      if (g.damage_bonus) out.damageBonuses.push({ source: g.name, value: evalFormula(g.damage_bonus.value, ctx, scope), abilities: g.damage_bonus.abilities ?? null, while: cond });
+      if (g.damage_bonus) out.damageBonuses.push({ source: g.name, value: evalFormula(g.damage_bonus.value, ctx, scope), abilities: g.damage_bonus.abilities ?? null, while: live(cond) });
       if (g.bonus?.checks) (out.bonuses ??= []).push({ checks: g.bonus.checks, value: evalFormula(g.bonus.value, ctx, scope), source: g.name });
       if (g.bonus?.initiative != null) out.initiativeBonus = (out.initiativeBonus ?? 0) + (evalFormula(g.bonus.initiative, ctx, scope) ?? 0);
       break;
@@ -379,6 +392,7 @@ function apply(ctx, g, scope, into, classLevel) {
       // the sheet takes them back off when its armor toggles say they don't apply.
       if (g.requires) out.conditionalStats.push({ stat: g.stat, value: v, requires: g.requires, source });
       const cur = out.stats[g.stat];
+      if (g.mode === "multiply") { out.statMult[g.stat] = (out.statMult[g.stat] ?? 1) * v; break; } // Haste, Slow: applied last
       if (g.mode === "max") out.stats[g.stat] = Math.max(cur ?? 0, v);
       else if (g.mode === "add") out.stats[g.stat] = (cur ?? 0) + v;
       else out.stats[g.stat] = v;
@@ -396,9 +410,18 @@ function apply(ctx, g, scope, into, classLevel) {
     case "asi":
       applyAsi(ctx, g, scope, into, source);
       break;
-    case "bonus":
+    case "bonus": {
       // A flat bonus: to ac, saves, checks, initiative, spell_attack, spell_dc, hp_max, attack or damage.
-      out.bonusList.push({ to: g.to, value: evalFormula(g.value ?? 0, ctx, scope) ?? 0, abilities: g.abilities ?? null, skills: g.skills ?? null, requires: g.requires ?? null, source: scope.label });
+      // A dice value ("1d4", "-1d4") is rolled at the table: Bless, Bane, Divine Favor. `attack_rolls`
+      // means every attack roll (weapons, Unarmed Strike, spells); `attack` only weapon attacks.
+      const dice = typeof g.value === "string" && /^[+-]?\d*d\d+$/i.test(g.value.trim()) ? g.value.trim() : null;
+      out.bonusList.push({ to: g.to, value: dice ? 0 : evalFormula(g.value ?? 0, ctx, scope) ?? 0, dice, damage_type: g.damage_type ?? null, note: g.note ?? null, unarmed: !!g.unarmed,
+        abilities: g.abilities ?? null, skills: g.skills ?? null, requires: g.requires ?? null, source: scope.label });
+      break;
+    }
+    case "ac_min":
+      // "Your AC can't be less than 17" (Barkskin).
+      out.acMin.push({ value: evalFormula(g.value ?? 10, ctx, scope) ?? 10, source: scope.label });
       break;
     case "ability":
       // Set a score to at least a number (Belt of Giant Strength) or raise it, past 20 up to `max` (Manual of Gainful Exercise).
@@ -753,15 +776,20 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   // Flat bonuses from `bonus` grants (magic items mostly).
   const bonusList = res.bonusList ?? [];
   const sumBonus = pred => bonusList.filter(pred).reduce((n, b) => n + (b.value ?? 0), 0);
-  const checkBonus = (ability, skill) => sumBonus(b => b.to === "checks" && (!b.abilities || b.abilities.includes(ability)) && (!b.skills || (skill && b.skills.includes(skill))));
+  const checkFits = (b, ability, skill) => b.to === "checks" && (!b.abilities || b.abilities.includes(ability)) && (!b.skills || (skill && b.skills.includes(skill)));
+  const checkBonus = (ability, skill) => sumBonus(b => checkFits(b, ability, skill));
+  // Dice bonuses as text to add after a number: ["+1d4"], ["-1d4"].
+  const diceFor = pred => bonusList.filter(b => b.dice && pred(b)).map(b => (/^[+-]/.test(b.dice) ? b.dice : `+${b.dice}`).replace(/^-/, "−"));
+  const attackDice = diceFor(b => b.to === "attack_rolls");
 
   const skills = Object.entries(SKILLS).map(([name, ab]) => {
     const prof = skillProf.has(name), exp = expert.has(name);
     const bonus = mods[ab] + (exp ? pb * 2 : prof ? pb : 0) + bonusFor(name) + checkBonus(ab, name);
-    return { name, ability: ab, prof, expertise: exp, bonus };
+    return { name, ability: ab, prof, expertise: exp, bonus, dice: diceFor(b => checkFits(b, ab, name)) };
   });
   const saveProf = new Set(res.proficiencies.save.map(s => s.value));
-  const saves = ABILITY_KEYS.map(a => ({ ability: a, prof: saveProf.has(a), bonus: mods[a] + (saveProf.has(a) ? pb : 0) + sumBonus(b => b.to === "saves" && (!b.abilities || b.abilities.includes(a))) }));
+  const saveFits = a => b => b.to === "saves" && (!b.abilities || b.abilities.includes(a));
+  const saves = ABILITY_KEYS.map(a => ({ ability: a, prof: saveProf.has(a), bonus: mods[a] + (saveProf.has(a) ? pb : 0) + sumBonus(saveFits(a)), dice: diceFor(saveFits(a)) }));
 
   // Hit points: the starting class's die in full at level 1, then the fixed average of each
   // class's own die for every other level (including the first level of an added class).
@@ -790,7 +818,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     const first = casters[0];
     const pact = casters.find(c => c.progression === "pact");
     return {
-      ability: first.ability, dc: 8 + pb + mods[first.ability] + spellDcBonus, attack: pb + mods[first.ability] + spellAtkBonus,
+      ability: first.ability, dc: 8 + pb + mods[first.ability] + spellDcBonus, attack: pb + mods[first.ability] + spellAtkBonus, attackDice,
       slots: multiclassSlots(casters),
       pact: pact ? pactSlots(pact.level) : null,
       classes: casters.map(c => ({ id: c.id, name: c.name, ability: c.ability, dc: 8 + pb + mods[c.ability] + spellDcBonus, attack: pb + mods[c.ability] + spellAtkBonus })),
@@ -815,15 +843,22 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     attack: s.fixed_attack ?? (s.cast_ability ? pb + mods[s.cast_ability] + spellAtkBonus : null),
   }));
 
+  // Extra damage dice on weapon hits from effects (Divine Favor: "1d4 Radiant").
+  const diceText = b => `${b.dice.replace(/^\+/, "").replace(/^-/, "−")}${b.damage_type ? ` ${b.damage_type}` : ""}${b.note ? ` (${b.note})` : ""}`;
+  const damageDice = bonusList.filter(b => b.to === "damage" && b.dice).map(diceText);
+  const unarmedDice = bonusList.filter(b => b.to === "damage" && b.dice && b.unarmed).map(diceText);
+  // Damage bonuses whose state is on (Rage while Raging), for attacks with a matching ability.
+  const liveDamage = ab => res.damageBonuses.filter(d => !d.while && (!d.abilities || d.abilities.includes(ab)));
   // Weapons from magic items: attack and damage worked out like any weapon, plus the item's bonus.
   const weaponAttacks = (res.weapons ?? []).map(w => {
     const ab = w.ability === "finesse" ? (mods.dex > mods.str ? "dex" : "str") : (ABILITY_KEYS.includes(w.ability) ? w.ability : "str");
     const plus = w.bonus ?? 0;
-    const dmgMod = mods[ab] + plus + sumBonus(b => b.to === "damage");
+    const dmgMod = mods[ab] + plus + sumBonus(b => b.to === "damage") + liveDamage(ab).reduce((n, d) => n + (d.value ?? 0), 0);
     return {
       name: w.name, source: w.source, ability: ab, properties: w.properties ?? null,
       attack: (w.proficient === false ? 0 : pb) + mods[ab] + plus + sumBonus(b => b.to === "attack"),
-      damage: [`${w.damage ?? "1"}${dmgMod ? signedStr(dmgMod) : ""} ${w.damage_type ?? ""}`.trim(), w.extra].filter(Boolean).join(" + "),
+      attackDice: [...attackDice, ...diceFor(b => b.to === "attack")],
+      damage: [`${w.damage ?? "1"}${dmgMod ? signedStr(dmgMod) : ""} ${w.damage_type ?? ""}`.trim(), w.extra, ...damageDice].filter(Boolean).join(" + "),
     };
   });
 
@@ -831,6 +866,7 @@ export function summarize(build, pack, res = resolve(build, pack)) {
   // filtered by its armor and shield toggles. "No armor" (10 + Dex) is always available.
   const acOptions = [{ name: "No armor", value: 10 + mods.dex, armor: "none", shield: true, source: "Core rules" },
     ...res.acFormulas.map(a => ({ ...a, value: a.base + a.add.reduce((n, ab) => n + mods[ab], 0) }))];
+  const acMin = (res.acMin ?? []).sort((a, b) => b.value - a.value)[0] ?? null;
 
   // Advantages: marked on saves and skills, plus a list for the conditional ones.
   const advFor = (on, ability, skill) => res.advantages.filter(a => a.on === on
@@ -846,22 +882,25 @@ export function summarize(build, pack, res = resolve(build, pack)) {
     return { ...u, ability: ab, mod: mods[ab] };
   }).sort((a, b) => b.mod - a.mod || (b.die ? 1 : 0) - (a.die ? 1 : 0))[0];
   const dmgBonuses = res.damageBonuses.filter(d => !d.abilities || d.abilities.includes(best.ability));
+  const unarmedMod = best.mod + liveDamage(best.ability).reduce((n, d) => n + (d.value ?? 0), 0); // Rage while Raging
   const unarmed = {
-    name: "Unarmed Strike", attack: pb + best.mod, ability: best.ability,
-    damage: best.die ? `${best.die}${best.mod ? signedStr(best.mod) : ""}` : String(Math.max(1, 1 + best.mod)),
-    type: "Bludgeoning", source: best.source,
-    notes: dmgBonuses.map(d => `${signedStr(d.value)} ${d.while ? `while ${d.while}` : ""} (${d.source})`.replace(/\s+/g, " ")),
+    name: "Unarmed Strike", attack: pb + best.mod, attackDice, ability: best.ability,
+    damage: best.die ? `${best.die}${unarmedMod ? signedStr(unarmedMod) : ""}` : String(Math.max(1, 1 + unarmedMod)),
+    type: "Bludgeoning", extraDice: unarmedDice, source: best.source,
+    notes: [...dmgBonuses.filter(d => d.while).map(d => `${signedStr(d.value)} while ${d.while} (${d.source})`),
+      ...dmgBonuses.filter(d => !d.while).map(d => `includes ${signedStr(d.value)} from ${d.source}`)],
   };
 
   return {
     initiativeAdvantage: res.advantages.filter(a => a.on === "initiative").map(a => ({ source: a.source, note: a.vs ? `against ${a.vs}` : a.while ? `while ${a.while}` : null })),
-    acOptions, unarmed, conditionalStats: res.conditionalStats, resistances: res.resistances, advantages: res.advantages,
+    toggles: res.toggles ?? [], acOptions, acMin, unarmed, conditionalStats: res.conditionalStats, resistances: res.resistances, advantages: res.advantages,
     acBonuses: bonusList.filter(b => b.to === "ac"), armorItems: res.armorItems ?? [], weaponAttacks, bonusList, abilityMods: res.abilityMods ?? [],
     level, scores, mods, pb, skills, saves, hp, hitDie: cls?.hit_die ?? 8, hitDice,
     classes: classes.map(c => ({ id: c.id, name: c.entry.name, level: c.level, subclass: c.subclass, subclassName: pack.subclasses?.[c.subclass]?.name ?? null })),
     ac: Math.max(...acOptions.filter(o => o.armor === "none").map(o => o.value)),
     initiative: mods.dex + (res.initiativeBonus ?? 0) + sumBonus(b => b.to === "initiative") + checkBonus("dex", null),
-    speed: res.stats.speed ?? 30, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
+    initiativeDice: diceFor(b => b.to === "initiative" || checkFits(b, "dex", null)),
+    speed: Math.floor((res.stats.speed ?? 30) * (res.statMult?.speed ?? 1)), speedMult: res.statMult?.speed ?? 1, darkvision: res.stats.darkvision ?? 0, size: res.stats.size, creatureType: res.stats.creature_type,
     passivePerception: 10 + skills.find(s => s.name === "Perception").bonus,
     proficiencies: res.proficiencies, features: res.features, feats: res.feats, resources, spells, spellcasting, gold,
   };

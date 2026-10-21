@@ -39,20 +39,27 @@ const spellName = id => id.split("-").map((w, i) => i && SMALL.has(w) ? w : w.ch
 
 export function describeGrant(g) {
   if (!g || typeof g !== "object") return "";
-  const v = typeof g.value === "number" ? signed(g.value) : `+${g.value}`;
+  const v = typeof g.value === "number" ? signed(g.value) : /^[+-]/.test(String(g.value)) ? String(g.value).replace(/^-/, "−") : `+${g.value}`;
   switch (g.type) {
     case "bonus": {
       const who = g.abilities?.length ? g.abilities.map(a => ABILITIES[a]).join(", ") + " " : "";
+      if (g.to === "damage" && g.damage_type) return `${v} ${g.damage_type} damage on weapon hits${g.note ? ` (${g.note})` : ""}`;
       const what = {
         ac: "AC", saves: `${who}saving throws`, checks: g.skills?.length ? `${g.skills.join(", ")} checks` : `${who}ability checks`, initiative: "Initiative",
         spell_attack: "spell attack rolls", spell_dc: "spell save DC", hp_max: "Hit Point maximum", attack: "weapon attack rolls", damage: "weapon damage rolls",
+        attack_rolls: "attack rolls",
       }[g.to] ?? g.to;
-      return `${v} to ${what}${g.requires ? ` ${REQ[g.requires] ?? ""}` : ""}`;
+      return `${v} to ${what}${g.requires ? ` ${REQ[g.requires] ?? ""}` : ""}${g.note ? ` (${g.note})` : ""}`;
     }
+    case "ac_min":
+      return `AC can't be lower than ${g.value}`;
+    case "ac_formula":
+      return `AC ${g.base ?? 10}${(g.add ?? []).map(a => ` + ${ABILITIES[a]} modifier`).join("")}${g.armor === "none" ? " without armor" : ""}`;
     case "ability":
       return g.set != null ? `${ABILITIES[g.ability]} becomes ${g.set} (unless already higher)` : `${ABILITIES[g.ability]} ${signed(g.add)}${g.max ? `, maximum ${g.max}` : ""}`;
     case "stat":
-      if (g.stat === "speed") return g.mode === "max" ? `Speed becomes ${g.value} ft (unless already higher)` : `${signed(g.value)} ft Speed`;
+      if (g.stat === "speed") return g.mode === "multiply" ? (g.value === 2 ? "Speed doubled" : g.value === 0.5 ? "Speed halved" : `Speed ×${g.value}`)
+        : g.mode === "max" ? `Speed becomes ${g.value} ft (unless already higher)` : `${signed(g.value)} ft Speed`;
       if (g.stat === "darkvision") return `Darkvision ${g.value} ft`;
       return `${g.stat}: ${g.value}`;
     case "resource":
@@ -64,7 +71,11 @@ export function describeGrant(g) {
     case "feature": {
       const bits = [];
       if (g.resistances?.length) bits.push(`Resistance to ${g.resistances.join(", ")} damage`);
-      if (g.advantage?.length) bits.push(`Advantage on ${g.advantage.map(a => a.skills?.length ? `${a.skills.join(", ")} checks` : a.on === "save" ? "saving throws" : a.on).join(", ")}${g.advantage[0].vs ? ` (${g.advantage[0].vs})` : ""}`);
+      const advWhat = a => a.skills?.length ? `${a.skills.join(", ")} checks`
+        : a.on === "save" ? `${a.abilities?.length ? a.abilities.map(x => ABILITIES[x]).join(", ") + " " : ""}saving throws`
+        : a.on === "check" ? `${a.abilities?.length ? a.abilities.map(x => ABILITIES[x]).join(", ") + " " : ""}ability checks`
+        : a.on === "attack" ? "attack rolls" : a.on === "initiative" ? "Initiative" : a.on;
+      if (g.advantage?.length) bits.push(`Advantage on ${g.advantage.map(advWhat).join(", ")}${g.advantage[0].vs ? ` (${g.advantage[0].vs})` : ""}`);
       return bits.join("; ") || "";
     }
     default:

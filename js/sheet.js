@@ -5,6 +5,7 @@ import { summarize, resolve, normalizeBuild, mergeContent, snapshotFor, titleCas
 import { esc, md } from "./render.js";
 import { itemLine, describeItemEffects, needsAttunement, customEntry, EFFECTS, effectDef, newEffect, DAMAGE_TYPES, SKILL_NAMES,
   ITEM_TYPES, RARITIES, rarityRank, EFFECT_KINDS, itemEffectKinds, itemPrice, canAttune } from "./items.js";
+import { hasEffect, effectOptions, selfOnly, effectEntry, effectName, effectConditions, describeEffect, endsOnRest } from "./effects.js";
 import { ABILITIES, ABBR, ABILITY_KEYS, SKILLS, signed, ordinal, CONDITIONS, CONDITION_NAMES } from "./rules.js";
 
 const OPEN_KEY = "character-builder:sheet";
@@ -14,7 +15,7 @@ let state = null; // { file, dirty }
 let loadedPack = null; // the content pack in this browser, for "update content"
 export function setSheetPack(pack) { loadedPack = pack; }
 let root = null;
-const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
+const ui = { open: new Set(), closedGroups: new Set(), printing: false, layout: false, itemDraft: null, condPicker: false, condOpen: null, itemPicker: false, itemFilter: null, fxPicker: null, fxOpen: null, concCheck: null }; // expanded rows, collapsed groups, Edit layout mode, custom item being edited
 
 // ---------- loading / persistence ----------
 export function validateCharacter(data) {
@@ -77,9 +78,16 @@ const itemActive = (file, it) => !!it.equipped && (!needsAttunement(itemEntry(fi
 const activeItems = file => (file.play?.items ?? []).filter(it => itemActive(file, it)).map(it => ({ key: it.uid, entry: itemEntry(file, it) })).filter(x => x.entry);
 const newUid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
+// Spell effects live in play.effects: { uid, spell (a spell id), option (index of the chosen version, or
+// null), mine (this character cast it, so it holds their Concentration) }. play.states are the `while:`
+// states switched on ("Raging"). Spells used are copied into snapshot.spells like any other.
+const spellEntry = (file, id) => file.snapshot?.spells?.[id] ?? loadedPack?.spells?.[id] ?? null;
+const activeEffects = file => (file.play?.effects ?? []).map(x => ({ key: x.uid, entry: effectEntry(spellEntry(file, x.spell), x.option) })).filter(x => x.entry);
+const concentrating = file => (file.play?.effects ?? []).filter(x => x.mine && spellEntry(file, x.spell)?.concentration);
+
 function summaryFor(file) {
   const pack = snapshotPack(file);
-  return summarize(file.build, pack, resolve(file.build, pack, { items: activeItems(file) }));
+  return summarize(file.build, pack, resolve(file.build, pack, { items: activeItems(file), effects: activeEffects(file), states: file.play?.states ?? [] }));
 }
 const computed = () => summaryFor(state.file);
 
@@ -108,6 +116,8 @@ function ensurePlay() {
   p.hidden ??= [];        // ids of sheet elements hidden with Edit layout
   p.items ??= [];         // magic items
   p.conditions ??= [];    // condition names, e.g. ["Prone", "Poisoned"]
+  p.effects ??= [];       // spell effects on the character (Bless, Mage Armor)
+  p.states ??= [];        // while: states switched on (Raging)
 }
 
 function startingEquipmentText() {
@@ -167,6 +177,7 @@ function featureGroup(f, snapshot) {
   if (k.startsWith("species.")) return "species";
   if (k.startsWith("background.")) return "background";
   if (k.startsWith("item.")) return "items";
+  if (k.startsWith("effect.")) return null; // spell effects show in the Effects bar instead
   const m = k.match(/^(class|subclass)\.([^/>]+)/);
   if (!m) return "other";
   return `class:${m[1] === "class" ? m[2] : snapshot.subclasses?.[m[2]]?.class ?? m[2]}`;
@@ -217,7 +228,10 @@ function render() {
   const bg = f.snapshot.backgrounds?.[b.background];
   const exh = p.exhaustion ?? 0;
   const armorState = armorView(s, p);
-  const conds = (p.conditions ?? []).filter(c => CONDITIONS[c]);
+  // Conditions: the ones added by hand plus any an effect gives (Invisibility makes you Invisible).
+  const condFrom = {};
+  for (const x of p.effects ?? []) for (const c of effectConditions(spellEntry(f, x.spell), x.option)) if (CONDITIONS[c] && !p.conditions.includes(c)) condFrom[c] ??= effectName(spellEntry(f, x.spell), x.option);
+  const conds = [...new Set([...(p.conditions ?? []), ...Object.keys(condFrom)])].filter(c => CONDITIONS[c]).sort((a, b) => a.localeCompare(b));
   const stoppedBy = conds.filter(c => CONDITIONS[c].speedZero);
   const speed = stoppedBy.length ? 0 : Math.max(0, armorState.speed - 5 * exh);
   const ac = p.ac ?? armorState.ac;
@@ -228,8 +242,8 @@ function render() {
         <label for="ac-input">Armor class</label>
         <input id="ac-input" type="number" data-play="ac" data-focus="ac" value="${ac ?? ""}" placeholder="?" min="0" max="40">
         <small>${p.ac != null ? `<button type="button" class="link-btn" data-ac-reset>${armorState.ac == null ? "clear" : `reset to ${armorState.ac}`}</button>` : armorState.ac == null ? "enter armor AC" : esc(armorState.label)}</small>`),
-    hz("stat:initiative", "Initiative", "stat-box", `<span class="label">Initiative</span><strong>${signed(s.initiative - 2 * exh)}</strong>${s.initiativeAdvantage.length ? `<small>${advBadge(s.initiativeAdvantage)} Advantage</small>` : ""}`),
-    hz("stat:speed", "Speed", "stat-box", `<span class="label">Speed</span><strong>${speed} ft</strong>${stoppedBy.length ? `<small>${esc(stoppedBy.join(", "))}</small>` : `${armorState.speedLost ? `<small>−${armorState.speedLost} ${armorState.why}</small>` : ""}${exh ? `<small>−${5 * exh} from exhaustion</small>` : ""}`}`),
+    hz("stat:initiative", "Initiative", "stat-box", `<span class="label">Initiative</span><strong>${signed(s.initiative - 2 * exh)}${diceTag(s.initiativeDice)}</strong>${s.initiativeAdvantage.length ? `<small>${advBadge(s.initiativeAdvantage)} Advantage</small>` : ""}`),
+    hz("stat:speed", "Speed", "stat-box", `<span class="label">Speed</span><strong>${speed} ft</strong>${stoppedBy.length ? `<small>${esc(stoppedBy.join(", "))}</small>` : `${s.speedMult !== 1 ? `<small>${s.speedMult === 2 ? "Doubled" : s.speedMult === 0.5 ? "Halved" : `×${s.speedMult}`} by an effect</small>` : ""}${armorState.speedLost ? `<small>−${armorState.speedLost} ${armorState.why}</small>` : ""}${exh ? `<small>−${5 * exh} from exhaustion</small>` : ""}`}`),
     hz("stat:proficiency", "Proficiency", "stat-box", `<span class="label">Proficiency</span><strong>${signed(s.pb)}</strong>`),
     hz("stat:perception", "Passive Perception", "stat-box", `<span class="label">Passive Perception</span><strong>${s.passivePerception}</strong>`),
     hz("stat:size", "Size", "stat-box", `<span class="label">Size</span><strong class="small-value">${esc(s.size ?? "Medium")}</strong>${s.darkvision ? `<small>Darkvision ${s.darkvision} ft</small>` : ""}`),
@@ -280,8 +294,8 @@ function render() {
     return hz(`ability:${a}`, ABILITIES[a], "ability-block", `
       <div class="ability-top"><h3>${ABILITIES[a]}</h3><span class="ability-mod">${signed(s.mods[a])}</span><span class="ability-score">${s.scores[a]}</span></div>
       <ul>
-        <li class="${save.prof ? "prof" : ""}"><span class="dot" aria-label="${save.prof ? "proficient" : "not proficient"}"></span>Saving throw${advBadge(save.advantage)}<span class="val">${signed(save.bonus)}</span></li>
-        ${skills.map(k => `<li class="${k.prof ? "prof" : ""} ${k.expertise ? "expert" : ""}"><span class="dot" aria-label="${k.expertise ? "expertise" : k.prof ? "proficient" : "not proficient"}"></span>${esc(k.name)}${advBadge(k.advantage)}<span class="val">${signed(k.bonus)}</span></li>`).join("")}
+        <li class="${save.prof ? "prof" : ""}"><span class="dot" aria-label="${save.prof ? "proficient" : "not proficient"}"></span>Saving throw${advBadge(save.advantage)}<span class="val">${signed(save.bonus)}${diceTag(save.dice)}</span></li>
+        ${skills.map(k => `<li class="${k.prof ? "prof" : ""} ${k.expertise ? "expert" : ""}"><span class="dot" aria-label="${k.expertise ? "expertise" : k.prof ? "proficient" : "not proficient"}"></span>${esc(k.name)}${advBadge(k.advantage)}<span class="val">${signed(k.bonus)}${diceTag(k.dice)}</span></li>`).join("")}
       </ul>`);
   }).join("");
 
@@ -355,7 +369,8 @@ function render() {
     </div>` : ""}
 
     ${statStrip ? `<section class="combat-strip" aria-label="Combat">${statStrip}</section>` : ""}
-    ${renderConditions(conds)}
+    ${renderConditions(conds, condFrom)}
+    ${renderEffects(s, p, f)}
 
     <div class="${gridCls}">
       ${abilities.trim() ? `<section class="abilities-col" aria-label="Abilities and skills">${abilities}</section>` : ""}
@@ -368,6 +383,7 @@ function render() {
     ${renderSpells(s, p, f)}
     ${ui.condPicker && !ui.printing ? renderConditionPicker(conds) : ""}
     ${ui.itemPicker && !ui.printing ? renderItemPicker(s, p, f) : ""}
+    ${ui.fxPicker && !ui.printing ? renderEffectPicker(s, p, f) : ""}
 
     ${hz("panel:notes", "Notes", "panel notes-panel", `
       <h2>Notes</h2>
@@ -379,6 +395,7 @@ function render() {
   </article>`;
 
   if (ui.itemPicker && !ui.printing) setupItemPicker(pickerScroll);
+  if (ui.fxPicker && !ui.printing) filterEffects();
   if (focusId) {
     const el = root.querySelector(`[data-focus="${CSS.escape(focusId)}"]`);
     if (el) el.focus({ preventScroll: !!ui.itemPicker });
@@ -454,14 +471,17 @@ function armorView(s, p) {
     base = armorItem.ac + (armorType === "light" ? dex : armorType === "medium" ? Math.min(dex, 2) : 0) + (armorItem.bonus ?? 0);
     baseName = armorItem.name;
   } else if (chosen) { base = chosen.value; baseName = chosen.name; }
-  const ac = base != null ? base + shieldAc + bonus : null;
+  let ac = base != null ? base + shieldAc + bonus : null;
+  // "AC can't be lower than 17" (Barkskin): a floor, not a bonus.
+  const floor = s.acMin && ac != null && ac < s.acMin.value ? s.acMin : null;
+  if (floor) ac = floor.value;
   const speedLost = (s.conditionalStats ?? []).filter(c => c.stat === "speed" && fails(c.requires)).reduce((n, c) => n + (c.value ?? 0), 0);
   const lostAc = armored ? [] : s.acOptions.filter(o => o.armor === "none" && !options.includes(o) && o.source !== "Core rules").map(o => o.name);
   const bonusNames = bonuses.map(b => b.source);
   const note = armored && !armorItem ? `Your armor sets your AC; type it in the box${bonus ? ` (add ${signed(bonus)} from ${bonusNames.join(", ")})` : ""}.`
     : lostAc.length ? `${lostAc.join(", ")} doesn't work with a shield.` : "";
   const why = armored ? "in armor" : "with a shield";
-  const label = base != null ? [baseName, shield ? (shieldItem?.name ?? "shield") : null, ...bonusNames].filter(Boolean).join(" + ") : "";
+  const label = floor ? `${floor.source} (at least ${floor.value})` : base != null ? [baseName, shield ? (shieldItem?.name ?? "shield") : null, ...bonusNames].filter(Boolean).join(" + ") : "";
   return { why, options, method: chosen?.name ?? null, ac, label, speed: s.speed - speedLost, speedLost, note, armorItem, shieldItem, armorType, shield, shieldAc, bonus };
 }
 
@@ -519,10 +539,10 @@ function renderAttacks(s, p) {
   const u = s.unarmed;
   return hz("panel:attacks", "Weapons and attacks", "panel", `<h2>Weapons and attacks</h2>
     <table class="attack-table computed"><tbody><tr>
-      <th scope="row">${esc(u.name)}</th><td>${signed(u.attack)}</td><td>${esc(`${u.damage} ${u.type}`)}</td>
+      <th scope="row">${esc(u.name)}</th><td>${signed(u.attack)}${diceTag(u.attackDice)}</td><td>${esc([`${u.damage} ${u.type}`, ...(u.extraDice ?? [])].join(" + "))}</td>
       <td class="muted">${esc([u.source !== "Core rules" ? `${u.source}, ${ABILITIES[u.ability]}` : ABILITIES[u.ability], ...u.notes].join("; "))}</td>
     </tr>${(s.weaponAttacks ?? []).map(w => `<tr class="item-attack">
-      <th scope="row">${esc(w.name)}</th><td>${signed(w.attack)}</td><td>${esc(w.damage)}</td>
+      <th scope="row">${esc(w.name)}</th><td>${signed(w.attack)}${diceTag(w.attackDice)}</td><td>${esc(w.damage)}</td>
       <td class="muted">${esc([ABILITIES[w.ability], w.properties].filter(Boolean).join("; "))}</td>
     </tr>`).join("")}</tbody></table>
     ${p.attacks.length ? `<table class="attack-table">
@@ -534,6 +554,7 @@ function renderAttacks(s, p) {
         <td><input type="text" data-attack="${i}" data-field="notes" data-focus="atk-${i}-notes" value="${esc(a.notes)}" aria-label="Notes"></td>
         <td><button type="button" class="link-btn" data-remove-attack="${i}" aria-label="Remove ${esc(a.name || "attack")}">Remove</button></td>
       </tr>`).join("")}</tbody></table>` : `<p class="muted attack-hint">Add your weapons here. Attack bonus is your Strength or Dexterity modifier plus your proficiency bonus if you're trained with it.</p>`}
+    ${attackEffectNote(s)}
     <button type="button" class="btn" data-add-attack>Add an attack</button>`, "section");
 }
 
@@ -559,7 +580,7 @@ function renderResources(s, p) {
 // ---------- conditions ----------
 // A bar of the conditions the character has. Clicking one shows what it does; "Add condition"
 // opens a window with every condition in alphabetical order.
-function renderConditions(conds) {
+function renderConditions(conds, from = {}) {
   return hz("stat:conditions", "Conditions", "conditions-bar", `
     <span class="label">Conditions</span>
     <span class="cond-list">${conds.map(c => {
@@ -568,7 +589,7 @@ function renderConditions(conds) {
         <div class="cond-pop" role="dialog" aria-label="${esc(c)}">
           <strong>${esc(c)}</strong>
           <ul>${CONDITIONS[c].rules.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
-          <button type="button" class="link-btn" data-cond-remove="${esc(c)}">Remove ${esc(c)}</button>
+          ${from[c] ? `<p class="muted">From ${esc(from[c])}. It goes when that effect ends.</p>` : `<button type="button" class="link-btn" data-cond-remove="${esc(c)}">Remove ${esc(c)}</button>`}
         </div>` : ""}</span>`;
     }).join("") || `<span class="muted cond-none">None</span>`}</span>
     <button type="button" class="btn cond-add" data-cond-add>Add condition</button>`, "section");
@@ -586,6 +607,140 @@ function renderConditionPicker(conds) {
       <div class="cond-foot"><button type="button" class="btn btn-primary" data-cond-close>Done</button></div>
     </div>
   </div>`;
+}
+
+// ---------- effects ----------
+// "+1d4" after a number, for Bless, Bane, Guidance.
+const diceTag = list => (list?.length ? `<span class="dice-bonus">${esc(list.join(""))}</span>` : "");
+
+// A bar under Conditions: toggles for states like Rage, then the spell effects on the character.
+// Clicking an effect shows what it does; "Add effect" opens a window of every spell that has one.
+function renderEffects(s, p, f) {
+  const toggles = s.toggles ?? [];
+  const conc = concentrating(f);
+  const chips = (p.effects ?? []).map(x => {
+    const sp = spellEntry(f, x.spell);
+    const name = effectName(sp, x.option);
+    const open = ui.fxOpen === x.uid && !ui.printing;
+    const isConc = x.mine && sp?.concentration;
+    return `<span class="cond-wrap"><button type="button" class="cond-chip fx-chip${open ? " open" : ""}${isConc ? " conc" : ""}" data-fx-info="${esc(x.uid)}" aria-expanded="${open}">${esc(name)}${isConc ? `<span class="conc-mark" title="You're concentrating on this">C</span>` : ""}</button>${open ? `
+      <div class="cond-pop" role="dialog" aria-label="${esc(name)}">
+        <strong>${esc(name)}</strong>
+        <ul>${describeEffect(sp, x.option).map(l => `<li>${esc(l)}</li>`).join("") || "<li>Nothing on the sheet changes.</li>"}</ul>
+        <p class="muted">${esc([sp?.duration ? `Lasts ${String(sp.duration).replace(/^up to/i, "up to")}` : "", isConc ? "You're concentrating on it" : x.mine ? "You cast it" : "Cast on you by someone else"].filter(Boolean).join(". "))}.</p>
+        <button type="button" class="link-btn" data-fx-remove="${esc(x.uid)}">End ${esc(sp?.name ?? "effect")}</button>
+      </div>` : ""}</span>`;
+  });
+  const states = toggles.map(t => `<button type="button" class="fx-toggle${t.on ? " on" : ""}" data-state-toggle="${esc(t.state)}" aria-pressed="${t.on}" title="${esc(t.on ? `End ${t.name}` : `Start ${t.name}`)}"><span class="insp-dot" aria-hidden="true"></span>${esc(t.name)}</button>`);
+  const check = ui.concCheck && !ui.printing ? `<div class="conc-check" role="alert">
+      <span>${esc(ui.concCheck.text)}</span>
+      ${ui.concCheck.dc ? `<button type="button" class="btn" data-conc="keep">Made it</button><button type="button" class="btn" data-conc="lose">Failed</button>` : `<button type="button" class="btn" data-conc="ok">OK</button>`}
+    </div>` : "";
+  if (ui.printing && !chips.length && !toggles.some(t => t.on)) return "";
+  return hz("stat:effects", "Effects", "conditions-bar effects-bar", `
+    <span class="label">Effects</span>
+    <span class="cond-list">${states.join("")}${chips.join("") || (states.length ? "" : `<span class="muted cond-none">None</span>`)}</span>
+    ${conc.length && !ui.printing ? `<span class="muted conc-note">Concentrating on ${esc(conc.map(x => spellEntry(f, x.spell)?.name).join(", "))}</span>` : ""}
+    <button type="button" class="btn cond-add" data-fx-add>Add effect</button>
+    ${check}`, "section");
+}
+
+// Effects that change attacks, listed under the attack table (typed-in attacks don't pick them up).
+function attackEffectNote(s) {
+  const lines = (s.bonusList ?? []).filter(b => ["attack_rolls", "attack", "damage"].includes(b.to) && (state.file.play.effects ?? []).length && activeEffects(state.file).some(x => x.entry.name === b.source))
+    .map(b => `${b.source}: ${b.dice ? `${/^[+-]/.test(b.dice) ? b.dice.replace(/^-/, "−") : `+${b.dice}`}` : signed(b.value)}${b.to === "damage" ? ` ${b.damage_type ?? ""} damage` : " to hit"}${b.note ? ` ${b.note}` : ""}`.replace(/\s+/g, " "));
+  if (!lines.length) return "";
+  return `<p class="muted fx-attack-note">${esc(lines.join(" · "))}. Rows you typed in don't include these.</p>`;
+}
+
+const ownSpellIds = s => new Set((s.spells ?? []).map(x => x.id));
+
+function renderEffectPicker(s, p, f) {
+  const F = ui.fxPicker;
+  const pool = { ...(loadedPack?.spells ?? {}), ...(f.snapshot.spells ?? {}) };
+  const mine = ownSpellIds(s);
+  const list = Object.entries(pool).filter(([, sp]) => hasEffect(sp)).sort(([, a], [, b]) => a.name.localeCompare(b.name));
+  const active = new Set((p.effects ?? []).map(x => `${x.spell}|${x.option ?? ""}`));
+  const row = ([id, sp]) => {
+    const opts = effectOptions(sp);
+    const lines = describeEffect(sp, opts ? 0 : null);
+    const tags = [sp.level === 0 ? "Cantrip" : `Level ${sp.level}`, sp.concentration ? "Concentration" : null, selfOnly(sp) ? "Caster only" : null, sp.duration].filter(Boolean);
+    const add = (i, label) => {
+      const on = active.has(`${id}|${i ?? ""}`);
+      return `<button type="button" class="btn fx-add-btn${on ? " is-on" : ""}" data-fx-pick="${esc(id)}"${i != null ? ` data-fx-opt="${i}"` : ""} ${on ? "disabled" : ""}>${on ? "On" : esc(label)}</button>`;
+    };
+    return `<li class="fx-row" data-q="${esc(searchText(`${sp.name} ${lines.join(" ")} ${(opts ?? []).map(o => o.name).join(" ")}`))}">
+      <div class="fx-row-head"><strong>${esc(sp.name)}</strong><span class="muted">${esc(tags.join(" · "))}</span></div>
+      <p class="fx-lines">${esc(opts ? `Pick a version. ${opts[0].name}: ${describeEffect(sp, 0).join(" · ")}` : lines.join(" · ") || "Nothing on the sheet changes.")}</p>
+      <div class="fx-actions">${!opts ? add(null, "Add")
+        : opts.length <= 6 ? opts.map((o, i) => add(i, o.name)).join("")
+        : `<select data-fx-select="${esc(id)}" aria-label="${esc(sp.name)} version">${opts.map((o, i) => `<option value="${i}"${active.has(`${id}|${i}`) ? " disabled" : ""}>${esc(o.name)}${active.has(`${id}|${i}`) ? " (on)" : ""}</option>`).join("")}</select>
+           <button type="button" class="btn fx-add-btn" data-fx-pick="${esc(id)}" data-fx-from-select>Add</button>`}</div>
+    </li>`;
+  };
+  const yours = list.filter(([id]) => mine.has(id));
+  const others = list.filter(([id, sp]) => !mine.has(id) && !selfOnly(sp));
+  return `<div class="cond-back fx-back" data-fx-back>
+    <div class="cond-modal fx-modal" role="dialog" aria-modal="true" aria-labelledby="fx-title">
+      <h2 id="fx-title">Add an effect</h2>
+      <input type="search" class="ip-search" data-fx-q data-focus="fx-q" value="${esc(F.q)}" placeholder="Search ${list.length} spells with effects…" aria-label="Search spell effects" autocomplete="off" spellcheck="false">
+      <label class="check fx-others"><input type="checkbox" data-fx-others${F.others ? " checked" : ""}> Someone else cast it on me <span class="muted">(it won't count as your Concentration)</span></label>
+      <div class="fx-results">
+        ${yours.length ? `<h3 class="fx-group">Your spells</h3><ul class="fx-list">${yours.map(row).join("")}</ul>` : ""}
+        ${others.length ? `<h3 class="fx-group">Cast on you by someone else</h3><ul class="fx-list">${others.map(row).join("")}</ul>` : ""}
+        <p class="ip-none fx-none" hidden>No spell effects match.</p>
+      </div>
+      <div class="cond-foot ip-foot"><span class="ip-added muted" aria-live="polite">${F.added ? `Added ${esc(F.added)}.` : ""}</span><button type="button" class="btn btn-primary" data-fx-close>Done</button></div>
+    </div>
+  </div>`;
+}
+
+function filterEffects() {
+  const modal = root.querySelector(".fx-modal");
+  if (!modal) return;
+  const words = searchText(ui.fxPicker.q).split(" ").filter(Boolean);
+  let n = 0;
+  for (const li of modal.querySelectorAll(".fx-row")) {
+    const ok = words.every(w => li.dataset.q.includes(` ${w}`));
+    li.hidden = !ok;
+    if (ok) n++;
+  }
+  for (const h of modal.querySelectorAll(".fx-group")) h.hidden = ![...h.nextElementSibling.children].some(li => !li.hidden);
+  modal.querySelector(".fx-none").hidden = n > 0;
+}
+
+// Turn an effect on. `mine`: this character cast it, so a second Concentration spell of theirs
+// replaces the first.
+function addEffect(id, option, mine) {
+  const f = state.file;
+  const sp = spellEntry(f, id);
+  if (!sp?.effect) return false;
+  const nowConc = mine && sp.concentration ? concentrating(f) : [];
+  if (nowConc.length && !confirm(`You're concentrating on ${nowConc.map(x => spellEntry(f, x.spell)?.name).join(", ")}. Casting ${sp.name} ends ${nowConc.length > 1 ? "them" : "it"}. Go ahead?`)) return false;
+  itemChange((p, file) => {
+    if (loadedPack?.spells?.[id] && !file.snapshot.spells?.[id]) (file.snapshot.spells ??= {})[id] = loadedPack.spells[id];
+    const drop = new Set(nowConc.map(x => x.uid));
+    p.effects = p.effects.filter(x => !drop.has(x.uid) && !(x.spell === id && (x.option ?? null) === (option ?? null)));
+    p.effects.push({ uid: newUid(), spell: id, option: option ?? null, mine: !!mine });
+  });
+  return true;
+}
+const removeEffects = pred => itemChange(p => { p.effects = p.effects.filter(x => !pred(x)); });
+
+// Switching a state on uses one of its uses when it has them (entering a Rage spends a Rage).
+function toggleState(state_, s) {
+  const t = (s.toggles ?? []).find(x => x.state === state_);
+  if (!t) return;
+  itemChange(p => {
+    if (p.states.includes(state_)) { p.states = p.states.filter(x => x !== state_); return; }
+    const feat = s.features.find(x => x.key === t.key);
+    const res = s.resources.find(r => r.name.toLowerCase() === t.name.toLowerCase());
+    const left = feat?.uses?.max ? feat.uses.max - (p.featureUses[feat.key] ?? 0) : res ? (res.max ?? 0) - (p.resourcesUsed[res.id] ?? 0) : 1;
+    if (left <= 0 && !confirm(`No ${t.name} uses left. Turn it on anyway?`)) return;
+    p.states = [...p.states, state_];
+    if (feat?.uses?.max) p.featureUses[feat.key] = Math.min(feat.uses.max, (p.featureUses[feat.key] ?? 0) + 1);
+    else if (res) p.resourcesUsed[res.id] = Math.min(res.max ?? 0, (p.resourcesUsed[res.id] ?? 0) + 1);
+  });
 }
 
 // ---------- the magic item picker ----------
@@ -741,6 +896,12 @@ function previewItem(id, open) {
   F.open = show ? [...new Set([...F.open, id])] : F.open.filter(x => x !== id);
 }
 
+function closeEffectPicker() {
+  ui.fxPicker = null;
+  render();
+  root.querySelector("[data-fx-add]")?.focus();
+}
+
 function closeItemPicker() {
   ui.itemPicker = false;
   if (ui.itemFilter) { ui.itemFilter.added = null; ui.itemFilter.open = []; }
@@ -781,6 +942,13 @@ function itemPickerKey(e) {
 
 function onKey(e) {
   if (ui.itemPicker) return itemPickerKey(e);
+  if (ui.fxPicker && e.key === "Escape") {
+    e.preventDefault();
+    const q = e.target.matches?.("[data-fx-q]") ? e.target : null;
+    if (q?.value) { q.value = ""; ui.fxPicker.q = ""; filterEffects(); } else closeEffectPicker();
+    return;
+  }
+  if (ui.fxOpen && e.key === "Escape") { const u = ui.fxOpen; ui.fxOpen = null; render(); root.querySelector(`[data-fx-info="${CSS.escape(u)}"]`)?.focus(); return; }
   if (e.key !== "Escape") return;
   if (ui.condPicker) { ui.condPicker = false; render(); root.querySelector("[data-cond-add]")?.focus(); }
   else if (ui.condOpen) { const c = ui.condOpen; ui.condOpen = null; render(); root.querySelector(`[data-cond-info="${CSS.escape(c)}"]`)?.focus(); }
@@ -910,6 +1078,7 @@ function renderFeatures(s, p, f) {
   groups.set("other", { title: "Other", items: [] });
   for (const feat of s.features) {
     const g = featureGroup(feat, f.snapshot);
+    if (g == null) continue;
     if (!groups.has(g)) groups.set(g, { title: titleCase(g.replace(/^class:/, "")), items: [] });
     groups.get(g).items.push(feat);
   }
@@ -1003,6 +1172,8 @@ function renderSpells(s, p, f) {
     if (sp.always_prepared) tags.push("always prepared");
     if (e?.concentration) tags.push("concentration");
     if (e?.ritual) tags.push("ritual");
+    const on = (p.effects ?? []).some(x => x.spell === sp.id);
+    if (on) tags.push("active");
     if (sp.fixed_dc != null) tags.push(`DC ${sp.fixed_dc}${sp.fixed_attack != null ? `, ${signed(sp.fixed_attack)} to hit` : ""}`);
     else if (sp.cast_ability && sc && sp.cast_ability !== sc.ability) tags.push(`${ABBR[sp.cast_ability]}, DC ${sp.dc}, ${signed(sp.attack)} to hit`);
     const freeKey = `${sp.id}|${sp.source}`;
@@ -1020,6 +1191,8 @@ function renderSpells(s, p, f) {
       ${open ? `<div class="feature-body">
         ${e ? `<p class="muted">${esc([e.level === 0 ? `${e.school} cantrip` : `Level ${e.level} ${String(e.school ?? "").toLowerCase()}`, [].concat(e.components ?? []).join(", ") + (e.material ? ` (${e.material})` : ""), `${e.concentration ? "Concentration, " : ""}${e.duration ?? ""}`].filter(Boolean).join("; "))}</p>${md(String(e.text ?? "").replace(/^\s*#{1,6}\s+.*\n+/, ""))}` : `<p class="muted">This spell isn't in the content snapshot, so there's no description.</p>`}
         <p class="muted">From ${esc(sp.sources.join(" and "))}</p>
+        ${hasEffect(e) && !ui.printing ? `<p class="fx-cast"><button type="button" class="btn" data-fx-cast="${esc(sp.id)}">${on ? "Cast again" : effectOptions(e) ? "Turn on…" : "Turn on"}</button>
+          <span class="muted">${esc(describeEffect(e, effectOptions(e) ? 0 : null).slice(0, 2).join(" · "))}${effectOptions(e) ? " (pick a version)" : ""}</span></p>` : ""}
       </div>` : ""}
     </li>`;
   };
@@ -1036,7 +1209,7 @@ function renderSpells(s, p, f) {
       <div><span class="label">Ability</span><strong>${ABILITIES[c.ability]}</strong></div>
       <div><span class="label">Modifier</span><strong>${signed(s.mods[c.ability])}</strong></div>
       <div><span class="label">Save DC</span><strong>${c.dc}</strong></div>
-      <div><span class="label">Attack</span><strong>${signed(c.attack)}</strong></div>`)).join("") : ""}
+      <div><span class="label">Attack</span><strong>${signed(c.attack)}${diceTag(sc.attackDice)}</strong></div>`)).join("") : ""}
     ${slotRow}
     ${levelGroups || `<p class="muted">Everything here is hidden.</p>`}`, "section");
 }
@@ -1076,6 +1249,7 @@ const clampInt = (v, min, max) => Math.max(min, Math.min(max, Math.trunc(Number(
 function onInput(e) {
   const t = e.target;
   if (ui.itemPicker && t.matches("[data-ip-q]")) { ui.itemFilter.q = t.value; return applyItemFilter(); }
+  if (ui.fxPicker && t.matches("[data-fx-q]")) { ui.fxPicker.q = t.value; return filterEffects(); }
   if (ui.itemPicker && t.matches("[data-ip-price]")) { ui.itemFilter.maxPrice = t.value.trim(); return applyItemFilter(); }
   // Custom item editor: typing updates the draft without a re-render.
   if (ui.itemDraft && t.dataset.draft && t.type !== "checkbox") { ui.itemDraft[t.dataset.draft] = t.value; return; }
@@ -1091,6 +1265,7 @@ function onInput(e) {
 
 function onChange(e) {
   const t = e.target;
+  if (ui.fxPicker && t.matches("[data-fx-others]")) { ui.fxPicker.others = t.checked; return; }
   if (ui.itemPicker && t.closest(".ip-modal")) {
     const F = ui.itemFilter;
     if (t.matches("[data-ip-attune]")) F.attune = t.value;
@@ -1138,6 +1313,8 @@ function onClick(e) {
   // Clicking the dimmed backdrop closes the conditions window; clicking anywhere else closes a condition's tip.
   if (ui.condPicker && e.target.matches?.("[data-cond-back]")) { ui.condPicker = false; render(); return; }
   if (ui.itemPicker && e.target.matches?.("[data-ip-back]")) { closeItemPicker(); return; }
+  if (ui.fxPicker && e.target.matches?.("[data-fx-back]")) { closeEffectPicker(); return; }
+  if (ui.fxOpen && !e.target.closest(".cond-wrap")) { ui.fxOpen = null; if (!e.target.closest("button")) { render(); return; } }
   if (ui.condOpen && !e.target.closest(".cond-wrap")) { ui.condOpen = null; if (!e.target.closest("button")) { render(); return; } }
   const t = e.target.closest("button");
   if (!t || !state) return;
@@ -1192,6 +1369,31 @@ function onClick(e) {
   if (d.condInfo) { ui.condOpen = ui.condOpen === d.condInfo ? null : d.condInfo; render(); root.querySelector(`[data-cond-info="${CSS.escape(d.condInfo)}"]`)?.focus(); return; }
   if (d.condRemove) { const n = d.condRemove; ui.condOpen = null; return change(p => { p.conditions = p.conditions.filter(c => c !== n); }); }
   if (ui.itemPicker && itemPickerClick(t)) return;
+  if (d.fxAdd !== undefined) { ui.fxPicker = { q: "", others: false, added: null }; ui.fxOpen = null; render(); root.querySelector("[data-fx-q]")?.focus(); return; }
+  if (d.fxClose !== undefined) { closeEffectPicker(); return; }
+  if (d.fxPick) {
+    const sel = d.fxFromSelect !== undefined ? root.querySelector(`[data-fx-select="${CSS.escape(d.fxPick)}"]`) : null;
+    const opt = sel ? Number(sel.value) : d.fxOpt != null ? Number(d.fxOpt) : null;
+    const sp = spellEntry(state.file, d.fxPick);
+    const mine = !ui.fxPicker?.others && ownSpellIds(s).has(d.fxPick);
+    if (addEffect(d.fxPick, opt, mine) && ui.fxPicker) { ui.fxPicker.added = effectName(sp, opt); render(); }
+    return;
+  }
+  if (d.fxCast) {
+    // From a spell row: no versions, so it goes straight on; with versions, the window opens on it.
+    const sp = spellEntry(state.file, d.fxCast);
+    if (effectOptions(sp)) { ui.fxPicker = { q: sp.name, others: false, added: null }; render(); root.querySelector("[data-fx-q]")?.focus(); return; }
+    addEffect(d.fxCast, null, true);
+    return;
+  }
+  if (d.fxInfo) { ui.fxOpen = ui.fxOpen === d.fxInfo ? null : d.fxInfo; render(); root.querySelector(`[data-fx-info="${CSS.escape(d.fxInfo)}"]`)?.focus(); return; }
+  if (d.fxRemove) { const uid = d.fxRemove; ui.fxOpen = null; return removeEffects(x => x.uid === uid); }
+  if (d.stateToggle) return toggleState(d.stateToggle, s);
+  if (d.conc) {
+    const c = ui.concCheck; ui.concCheck = null;
+    if (d.conc === "lose" && c?.uids) return removeEffects(x => c.uids.includes(x.uid));
+    render(); return;
+  }
   if (d.itemOpen !== undefined) { ui.itemPicker = true; ui.itemFilter ??= newItemFilter(); ui.itemFilter.added = null; render(); root.querySelector("[data-ip-q]")?.focus(); return; }
   if (d.itemAdd) { if (ui.itemFilter) ui.itemFilter.added = loadedPack?.items?.[d.itemAdd]?.name ?? null; return addPackItem(d.itemAdd); }
   if (d.itemCustom !== undefined) { ui.itemDraft = { uid: null, name: "", text: "", attunement: false, effects: [newEffect("ac")] }; render(); root.querySelector('[data-focus="draft-name"]')?.focus(); return; }
@@ -1224,6 +1426,17 @@ function onClick(e) {
         const fromTemp = Math.min(p.hp.temp, n);
         p.hp.temp -= fromTemp;
         p.hp.current = Math.max(0, p.hp.current - (n - fromTemp));
+        // Taking damage while concentrating: a Constitution save, DC 10 or half the damage (up to 30).
+        // Dropping to 0 Hit Points ends Concentration outright.
+        const conc = concentrating(state.file);
+        if (conc.length) {
+          const names = conc.map(x => spellEntry(state.file, x.spell)?.name).join(", ");
+          if (p.hp.current === 0) {
+            const drop = new Set(conc.map(x => x.uid));
+            p.effects = p.effects.filter(x => !drop.has(x.uid));
+            ui.concCheck = { text: `You dropped to 0 Hit Points, so ${names} ended.` };
+          } else ui.concCheck = { dc: Math.min(30, Math.max(10, Math.floor(n / 2))), uids: conc.map(x => x.uid), text: `Concentration: make a Constitution saving throw, DC ${Math.min(30, Math.max(10, Math.floor(n / 2)))}, to keep ${names}.` };
+        }
       }
     });
   }
@@ -1232,8 +1445,8 @@ function onClick(e) {
 
 function rest(kind, s) {
   const msg = kind === "long"
-    ? "Take a long rest? You regain all hit points, hit dice and spell slots, and one level of exhaustion."
-    : "Take a short rest? Pact slots and short-rest features come back. Spend hit dice yourself to heal.";
+    ? "Take a long rest? You regain all hit points, hit dice and spell slots, and one level of exhaustion. Effects that last 8 hours or less end."
+    : "Take a short rest? Pact slots and short-rest features come back. Spend hit dice yourself to heal. Effects that last an hour or less end.";
   if (!confirm(msg)) return;
   change(p => {
     const shortOnes = s.resources.filter(r => r.recharge === "short");
@@ -1242,8 +1455,14 @@ function rest(kind, s) {
     for (const f of s.features.filter(f => f.uses?.recharge === "short")) p.featureUses[f.key] = 0;
     for (const sp of s.spells.filter(sp => sp.free_cast?.recharge === "short")) p.freeCastUsed[`${sp.id}|${sp.source}`] = 0;
     p.pactUsed = 0;
+    p.states = []; // Rage and the like end with any rest
+    p.effects = (p.effects ?? []).filter(x => !endsOnRest(spellEntry(state.file, x.spell), kind));
+    ui.concCheck = null;
+    // Effects that ended (Aid) can lower the Hit Point maximum, so heal to the new one.
+    const maxNow = summaryFor(state.file).hp ?? p.hp.current;
+    p.hp.current = Math.min(p.hp.current, maxNow);
     if (kind === "long") {
-      p.hp.current = s.hp ?? p.hp.current;
+      p.hp.current = maxNow;
       p.hp.temp = 0;
       p.hitDiceSpent = {};
       p.slotsUsed = {};
